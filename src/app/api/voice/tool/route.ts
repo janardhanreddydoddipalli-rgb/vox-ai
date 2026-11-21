@@ -12,6 +12,7 @@ import { upsertUserByEmail } from "@/lib/db";
 import { getTool, type ToolContext } from "@/agent/tools";
 import { addAgentStep } from "@/lib/db/repository";
 import { loadInterview } from "@/agent/state";
+import { checkDailyBudget } from "@/lib/cost-guard";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { startToolSpan } from "@/lib/tracing";
 import "@/agent/tools/all";
@@ -44,6 +45,12 @@ export async function POST(req: NextRequest) {
   // the signed-in user before any tool runs. Not owned → 404 (no existence leak).
   if (interviewId && !(await loadInterview(interviewId, user.id))) {
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+  }
+  // Cost guard: an over-budget user's live session gets no more tool work;
+  // the client ends the session when it sees budget_exceeded.
+  const budget = await checkDailyBudget(user.id);
+  if (!budget.allowed) {
+    return NextResponse.json({ ok: false, error: "budget_exceeded", message: budget.message });
   }
   const ctx: ToolContext = { userId: user.id, interviewId };
 
