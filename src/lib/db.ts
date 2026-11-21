@@ -5,7 +5,8 @@ import fs from "fs";
 const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-const db = new Database(path.join(dataDir, "voicebot.db"));
+const dbPath = process.env.VOICEBOT_DB_PATH || path.join(dataDir, "voicebot.db");
+const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 
 db.exec(`
