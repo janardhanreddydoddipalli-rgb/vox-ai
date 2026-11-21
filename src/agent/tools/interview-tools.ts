@@ -2,7 +2,10 @@
 // handler }, registered into the global registry on import.
 import { z } from "zod";
 import { GEMINI_MODEL } from "@/lib/config";
-import { listQuestions } from "@/lib/db/repository";
+import { listQuestions, getResume, addInterviewQa, countInterviewQa } from "@/lib/db/repository";
+import { db } from "@/lib/db/client";
+import { interviews } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { registerTool, type ToolContext } from "./index";
 import { advanceQuestion } from "../state";
 
@@ -19,15 +22,41 @@ const getQuestionInput = z.object({
   role: z.string().min(1).max(80),
   level: z.enum(["junior", "mid", "senior"]),
   asked_ids: z.array(z.string().uuid()).max(100).default([]),
+  use_resume: z.boolean().default(false),
 });
+
+// Build a resume-based question ("Tell me about <project>") from the
+// interview's stored resume. Deterministic per question index; null when
+// there is no resume or the projects were already covered.
+async function resumeQuestion(interviewId: string, askedIds: string[]) {
+  const iv = await getInterviewById(interviewId);
+  if (!iv?.resumeId) return null;
+  const resume = await getResume(iv.resumeId, iv.userId);
+  if (!resume || resume.projects.length === 0) return null;
+  const askedCount = askedIds.length;
+  const project = resume.projects[askedCount % resume.projects.length];
+  return {
+    question_id: `resume:${resume.id}:${askedCount}`,
+    category: "resume",
+    question: `Tell me about your work on ${project.name}. ${project.summary}`.trim(),
+    source: "resume",
+  };
+}
 
 export const getQuestion = {
   name: "get_question",
   description:
-    "Get the next interview question for a role and seniority level. Pass the ids of questions already asked in this interview so the same question never repeats.",
+    "Get the next interview question for a role and seniority level. Pass the ids of questions already asked in this interview so the same question never repeats. Set use_resume to true to ask about the candidate's résumé (projects, experience).",
   inputSchema: getQuestionInput,
-  handler: async (input: unknown) => {
-    const { role, level, asked_ids } = getQuestionInput.parse(input);
+  handler: async (input: unknown, ctx: ToolContext) => {
+    const { role, level, asked_ids, use_resume } = getQuestionInput.parse(input);
+
+    // Resume-based question when asked and a resume exists.
+    if (use_resume && ctx.interviewId) {
+      const rq = await resumeQuestion(ctx.interviewId, asked_ids);
+      if (rq) return { ...rq, level };
+    }
+
     const bank = await listQuestions();
     // Category match by role keywords; fall back to the whole bank.
     const r = role.toLowerCase();
@@ -121,12 +150,24 @@ export const evaluateAnswer = {
   description:
     "Evaluate the candidate's answer to the current question. Returns a structured score out of 10, clarity/depth/correctness notes, missing points, and whether a follow-up question is needed. Use its follow_up_question when follow_up_needed is true.",
   inputSchema: evaluateInput,
-  handler: async (input: unknown) => {
+  handler: async (input: unknown, ctx: ToolContext) => {
     const { question_id, answer_text } = evaluateInput.parse(input);
-    const bank = await listQuestions();
-    const question = bank.find((q) => q.id === question_id);
-    if (!question) return { error: `Unknown question_id: ${question_id}` };
-    return evaluateWithGemini(question.text, answer_text);
+    let questionText = "";
+    if (question_id.startsWith("resume:")) {
+      // Resume question: recover its text from the stored resume projects.
+      const iv = ctx.interviewId ? await getInterviewById(ctx.interviewId) : null;
+      const resume = iv?.resumeId ? await getResume(iv.resumeId, iv.userId!) : null;
+      const project = resume?.projects.find((p) => question_id.includes(p.name));
+      questionText = project ? `Tell me about your work on ${project.name}. ${project.summary}` : "Résumé project question";
+    } else {
+      const bank = await listQuestions();
+      const question = bank.find((q) => q.id === question_id);
+      if (!question) return { error: `Unknown question_id: ${question_id}` };
+      questionText = question.text;
+    }
+    const evaluation = await evaluateWithGemini(questionText, answer_text);
+    await recordQa(ctx, question_id, questionText, answer_text, evaluation);
+    return evaluation;
   },
 };
 
@@ -147,6 +188,53 @@ export const endInterview = {
   },
 };
 
+// Read the interview's resume, if any, as structured JSON.
+async function getInterviewById(id: string) {
+  const [row] = await db.select().from(interviews).where(eq(interviews.id, id)).limit(1);
+  return row ?? null;
+}
+
+export const readResume = {
+  name: "read_resume",
+  description:
+    "Read the candidate's résumé as structured JSON: skills, projects (name + summary), experience (company, role, period). Call before asking résumé-based questions.",
+  inputSchema: z.object({}),
+  handler: async (_input: unknown, ctx: ToolContext) => {
+    if (!ctx.interviewId) return { error: "No active interview" };
+    const iv = await getInterviewById(ctx.interviewId);
+    if (!iv?.resumeId) return { error: "No resume was provided for this interview" };
+    const resume = await getResume(iv.resumeId, iv.userId!);
+    if (!resume) return { error: "Resume not found" };
+    return {
+      skills: resume.skills,
+      projects: resume.projects,
+      experience: resume.experience,
+    };
+  },
+};
+
+// Persist one answered question (question, answer, evaluation) for the
+// interview report. Called by evaluate_answer's handler.
+async function recordQa(ctx: ToolContext, questionId: string, questionText: string, answerText: string, evaluation: unknown) {
+  if (!ctx.interviewId) return;
+  try {
+    const order = await countInterviewQa(ctx.interviewId);
+    await addInterviewQa({
+      interviewId: ctx.interviewId,
+      order,
+      questionId: questionId.startsWith("resume:") ? null : questionId,
+      questionText,
+      answerText,
+      evaluation: evaluation as never,
+    });
+  } catch (err) {
+    console.error("failed to record interview QA", err);
+  }
+}
+
+export { recordQa };
+
 registerTool(getQuestion);
 registerTool(evaluateAnswer);
 registerTool(endInterview);
+registerTool(readResume);
