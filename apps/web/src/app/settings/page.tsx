@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { upsertUserByEmail, listMemories } from "@/lib/db";
+import { upsertUserByEmail } from "@/lib/db";
+import { listMyMemories } from "@/lib/memories";
 import Link from "next/link";
 import SettingsClient from "./settings-client";
 
@@ -11,14 +12,7 @@ export default async function Settings() {
   if (!email) redirect("/");
 
   const user = await upsertUserByEmail(email);
-  const memories = user
-    ? (await listMemories(user.id)).map((m) => ({
-        id: m.id,
-        kind: m.kind,
-        text: m.text,
-        createdAt: m.createdAt.toISOString(),
-      }))
-    : [];
+  const memories = user ? await listMyMemories(user.id) : [];
 
   return (
     <main className="page">

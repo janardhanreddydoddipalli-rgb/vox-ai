@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   // the lockfile and hoisted store live), not from apps/web or a stray
   // lockfile higher up the disk.
   outputFileTracingRoot: path.join(__dirname, "../.."),
+  // Workspace packages ship TypeScript source.
+  transpilePackages: ["@vox/api-client"],
 };
 
 // Sentry config is inert without SENTRY_AUTH_TOKEN (source-map upload) — the

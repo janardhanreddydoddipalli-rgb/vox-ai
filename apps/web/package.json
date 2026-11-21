@@ -18,6 +18,7 @@
     "@sentry/nextjs": "^11.16.0",
     "@upstash/ratelimit": "^2.2.1",
     "@upstash/redis": "^1.41.0",
+    "@vox/api-client": "workspace:*",
     "drizzle-orm": "^0.45.4",
     "jose": "^6.2.18",
     "langfuse": "^3.39.2",
