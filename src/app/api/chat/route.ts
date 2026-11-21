@@ -4,6 +4,7 @@ import { chatSchema, firstIssueMessage } from "@/lib/schemas";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { upsertUserByEmail } from "@/lib/db";
+import { listMemoriesByKind } from "@/lib/db/repository";
 import { runAgentLoop, type LoopMessage } from "@/agent/loop";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { startInterview, loadInterview } from "@/agent/state";
@@ -108,6 +109,20 @@ export async function POST(req: NextRequest) {
           finish();
           return;
         }
+        // Load the candidate's known weaknesses so the interviewer drills
+        // them first. Best-effort: an empty memory bank changes nothing.
+        let systemPrompt = INTERVIEWER_SYSTEM_PROMPT;
+        try {
+          const weaknesses = await listMemoriesByKind(userId, "weakness", 5);
+          if (weaknesses.length > 0) {
+            const list = weaknesses.map((w) => `- ${w.text}`).join("\n");
+            systemPrompt +=
+              "\n\nThis candidate's known weak areas from past interviews (drill these first — " +
+              "pass them as focus_topics to get_question, one topic per call):\n" + list;
+          }
+        } catch (memErr) {
+          console.error("memory load failed", memErr);
+        }
         send("meta", {
           engine: "gemini",
           model: MODEL,
@@ -120,7 +135,7 @@ export async function POST(req: NextRequest) {
           const result = await runAgentLoop(
             userText,
             loopHistory,
-            INTERVIEWER_SYSTEM_PROMPT,
+            systemPrompt,
             {
               onToken: (t) => send("token", { text: t }),
               onSentence: (s) => send("sentence", { text: s }),

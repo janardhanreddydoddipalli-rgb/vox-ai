@@ -23,6 +23,7 @@ const getQuestionInput = z.object({
   level: z.enum(["junior", "mid", "senior"]),
   asked_ids: z.array(z.string().uuid()).max(100).default([]),
   use_resume: z.boolean().default(false),
+  focus_topics: z.array(z.string().min(1).max(120)).max(10).default([]),
 });
 
 // Build a resume-based question ("Tell me about <project>") from the
@@ -49,7 +50,7 @@ export const getQuestion = {
     "Get the next interview question for a role and seniority level. Pass the ids of questions already asked in this interview so the same question never repeats. Set use_resume to true to ask about the candidate's résumé (projects, experience).",
   inputSchema: getQuestionInput,
   handler: async (input: unknown, ctx: ToolContext) => {
-    const { role, level, asked_ids, use_resume } = getQuestionInput.parse(input);
+    const { role, level, asked_ids, use_resume, focus_topics } = getQuestionInput.parse(input);
 
     // Resume-based question when asked and a resume exists.
     if (use_resume && ctx.interviewId) {
@@ -69,7 +70,22 @@ export const getQuestion = {
     const fresh = pool.filter((q) => !asked_ids.includes(q.id));
     const source = fresh.length > 0 ? fresh : pool; // if everything was asked, reuse
     if (source.length === 0) return { question: null, message: "The question bank is empty." };
-    const picked = source[Math.floor(Math.random() * source.length)];
+    // Prioritise the candidate's known weaknesses: questions whose text or
+    // category matches a focus topic are picked with weight.
+    let picked: (typeof source)[number];
+    if (focus_topics.length > 0) {
+      const focus = focus_topics.map((t) => t.toLowerCase());
+      const matches = source.filter((q) => {
+        const hay = `${q.category} ${q.text}`.toLowerCase();
+        return focus.some((t) => hay.includes(t) || t.split(/\s+/).some((w) => w.length > 3 && hay.includes(w)));
+      });
+      // 70% of the time drill the weakness when a matching question exists.
+      const preferWeakness = matches.length > 0 && Math.random() < 0.7;
+      const pool = preferWeakness ? matches : source;
+      picked = pool[Math.floor(Math.random() * pool.length)];
+    } else {
+      picked = source[Math.floor(Math.random() * source.length)];
+    }
     return { question_id: picked.id, category: picked.category, question: picked.text, level };
   },
 };
