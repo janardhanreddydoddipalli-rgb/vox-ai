@@ -46,6 +46,8 @@ export class VoiceEngine {
   private abortCtl: AbortController | null = null;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
   private sttStart = 0;
+  // When set, chat requests run in interview (agent) mode for this interview.
+  interviewId: string | null = null;
 
   constructor(handlers: Handlers) {
     this.h = handlers;
@@ -183,7 +185,7 @@ export class VoiceEngine {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userText: text, history: this.history }),
+        body: JSON.stringify({ userText: text, history: this.history, ...(this.interviewId ? { interviewId: this.interviewId } : {}) }),
         signal: ctl.signal,
       });
       if (!res.ok || !res.body) throw new Error(`stream unavailable (${res.status})`);
