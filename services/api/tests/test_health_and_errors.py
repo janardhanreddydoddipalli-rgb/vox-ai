@@ -80,3 +80,13 @@ async def test_cors_allows_only_the_web_origin(client: AsyncClient) -> None:
         "/v1/me", headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "GET"}
     )
     assert "access-control-allow-origin" not in blocked.headers
+
+
+async def test_docs_and_schema_are_hidden_in_production(settings: Settings) -> None:
+    from httpx import ASGITransport
+
+    prod = create_app(settings.model_copy(update={"environment": "production"}))
+    async with AsyncClient(transport=ASGITransport(app=prod), base_url="http://testserver") as c:
+        assert (await c.get("/docs")).status_code == 404
+        assert (await c.get("/openapi.json")).status_code == 404
+    assert "/v1/me" in prod.openapi()["paths"]  # still generated from code for the client

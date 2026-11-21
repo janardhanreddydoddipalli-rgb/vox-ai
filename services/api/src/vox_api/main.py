@@ -34,7 +34,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         title="Vox API",
         version=__version__,
         lifespan=lifespan,
-        docs_url="/docs" if settings.environment != "production" else None,
+        # Production publishes no docs or schema; the client generator reads it from code.
+        docs_url=None if settings.environment == "production" else "/docs",
+        openapi_url=None if settings.environment == "production" else "/openapi.json",
         redoc_url=None,
     )
     app.state.settings = settings

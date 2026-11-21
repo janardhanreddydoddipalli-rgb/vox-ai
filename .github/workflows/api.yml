@@ -1,0 +1,89 @@
+name: API
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ["services/api/**", "packages/api-client/openapi.json", ".github/workflows/api.yml", "infra/docker/api.Dockerfile"]
+  push:
+    branches: [main]
+    paths: ["services/api/**", "packages/api-client/openapi.json", ".github/workflows/api.yml", "infra/docker/api.Dockerfile"]
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    # Deterministic: no model calls (FakeProvider only). Real Postgres 18 + pgvector.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    services:
+      postgres:
+        image: pgvector/pgvector:pg18 # matches Neon (Postgres 18.7, pgvector 0.8.7)
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_PASSWORD: ubuntu
+          POSTGRES_DB: vox_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ubuntu"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/vox_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+
+      - name: Install (exact lockfile, Python from .python-version)
+        run: uv sync --frozen
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+
+      - name: Mypy (strict)
+        run: uv run mypy
+
+      - name: Pytest
+        run: uv run pytest
+
+      - name: OpenAPI schema is current (packages/api-client/openapi.json)
+        run: uv run python scripts/export_openapi.py --check
+
+      # A fresh, empty database must migrate to head, and the models must
+      # match the migrations exactly (no pending autogenerate operations).
+      - name: Alembic upgrade on an empty database + model/migration check
+        env:
+          PGPASSWORD: ubuntu
+          DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/alembic_empty
+        run: |
+          psql -h localhost -U ubuntu -d vox_test -c "CREATE DATABASE alembic_empty"
+          uv run alembic upgrade head
+          uv run alembic current
+          uv run alembic check
+
+  docker:
+    # The production image builds and starts (health answers) without a database.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -f infra/docker/api.Dockerfile -t vox-api:ci services/api
+      - name: Smoke (liveness, non-root)
+        run: |
+          docker run -d --name api -p 8000:8000 \
+            -e DATABASE_URL=postgresql://u:p@127.0.0.1:1/none \
+            -e WEB_ORIGIN=http://localhost:3000 \
+            -e JWT_PUBLIC_KEY=unused \
+            -e INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789 \
+            vox-api:ci
+          for i in $(seq 1 30); do curl -fsS http://localhost:8000/v1/health && break; sleep 1; done
+          test "$(docker exec api id -u)" != "0"
+          docker logs api | tail -5
