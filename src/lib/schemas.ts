@@ -14,6 +14,14 @@ export const chatSchema = z
   .object({
     userText: z.string().trim().min(1, "userText is required").max(2000, "userText must be 2000 characters or fewer"),
     history: z.array(historyTurnSchema).max(20, "history must have at most 20 items").optional().default([]),
+    // Interview (agent) mode: either start a new interview or continue one.
+    interview: z
+      .object({
+        role: z.string().trim().min(1).max(80),
+        level: z.enum(["junior", "mid", "senior"]),
+      })
+      .optional(),
+    interviewId: z.string().uuid().optional(),
   })
   .strip();
 

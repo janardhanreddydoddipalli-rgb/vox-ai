@@ -4,6 +4,10 @@ import { chatSchema, firstIssueMessage } from "@/lib/schemas";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { auth } from "@/lib/auth";
 import { upsertUserByEmail } from "@/lib/db";
+import { runAgentLoop, type LoopMessage } from "@/agent/loop";
+import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
+import { startInterview, loadInterview } from "@/agent/state";
+import "@/agent/tools/all";
 
 export const runtime = "nodejs";
 
@@ -81,6 +85,69 @@ export async function POST(req: NextRequest) {
           /* already closed by cancel */
         }
       };
+
+      if (parsed.data.interview || parsed.data.interviewId) {
+        // ---- Agent (interview) mode: Gemini function calling loop. --------
+        if (!userId) {
+          send("meta", { engine: "offline", reason: "Sign in to use interview mode" });
+          send("token", { text: "Please sign in to start an interview." });
+          send("sentence", { text: "Please sign in to start an interview." });
+          send("done", { total_llm_ms: 0 });
+          finish();
+          return;
+        }
+        const iv = parsed.data.interview;
+        const interview = iv
+          ? await startInterview(userId, iv.role, iv.level)
+          : await loadInterview(parsed.data.interviewId!, userId);
+        if (!interview) {
+          send("meta", { engine: "offline", reason: "Interview not found" });
+          send("token", { text: "I couldn't find that interview." });
+          send("sentence", { text: "I couldn't find that interview." });
+          send("done", { total_llm_ms: 0 });
+          finish();
+          return;
+        }
+        send("meta", {
+          engine: "gemini",
+          model: MODEL,
+          mode: "interview",
+          interview_id: interview.id,
+          first_token_ms: Date.now() - startedAt,
+        });
+        try {
+          const loopHistory: LoopMessage[] = history.map((t) => ({ role: t.role === "assistant" ? "model" : "user", text: t.text }));
+          const result = await runAgentLoop(
+            userText,
+            loopHistory,
+            INTERVIEWER_SYSTEM_PROMPT,
+            {
+              onToken: (t) => send("token", { text: t }),
+              onSentence: (s) => send("sentence", { text: s }),
+            },
+            { userId, interviewId: interview.id },
+            upstream.signal,
+          );
+          for (const step of result.steps) send("tool", { name: step.toolName, step: step.stepIndex, duration_ms: step.durationMs });
+          send("done", {
+            total_llm_ms: Date.now() - startedAt,
+            interview_id: interview.id,
+            tool_steps: result.steps.length,
+            hit_step_limit: result.hitStepLimit,
+          });
+          finish();
+          return;
+        } catch (e) {
+          if ((e as any)?.name === "AbortError" || upstream.signal.aborted) {
+            finish();
+            return;
+          }
+          console.error("Agent loop error", e);
+          send("error", { message: "The interviewer hit a problem. Please try again." });
+          finish();
+          return;
+        }
+      }
 
       if (key) {
         const contents = [
