@@ -199,7 +199,8 @@ export default function DashboardClient({
       )}
 
       <p>
-        <Link href="/">← Back to Vox</Link> · <Link href="/privacy">Privacy</Link>
+        <Link href="/">← Back to Vox</Link> · <Link href="/settings">Memory settings</Link> ·{" "}
+        <Link href="/privacy">Privacy</Link>
       </p>
     </div>
   );
