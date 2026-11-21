@@ -1,0 +1,4 @@
+# Line endings: Makefile recipes and shell scripts must stay LF even on
+# Windows checkouts (core.autocrlf), or make/bash fail on trailing \r.
+Makefile text eol=lf
+*.sh text eol=lf

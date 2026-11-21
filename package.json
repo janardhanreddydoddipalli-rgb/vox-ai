@@ -1,47 +1,17 @@
 {
-  "name": "voicebot",
-  "version": "0.1.0",
+  "name": "vox",
   "private": true,
+  "description": "Vox — AI mock-interview voice assistant (monorepo)",
   "scripts": {
-    "dev": "next dev -H 0.0.0.0 -p 3000",
-    "build": "next build",
-    "start": "next start -p 3000",
-    "test": "vitest run",
-    "test:e2e": "playwright test --grep-invert @real-model",
-    "test:e2e:real-model": "playwright test --grep @real-model",
-    "typecheck": "tsc --noEmit",
-    "db:migrate": "node scripts/migrate.mjs",
-    "eval": "tsx evals/run.ts",
-    "lint": "eslint ."
-  },
-  "dependencies": {
-    "@sentry/nextjs": "^11.16.0",
-    "@upstash/ratelimit": "^2.2.1",
-    "@upstash/redis": "^1.41.0",
-    "better-sqlite3": "^11.10.0",
-    "drizzle-orm": "^0.45.4",
-    "langfuse": "^3.39.2",
-    "next": "^15.5.4",
-    "next-auth": "^5.0.0-beta.32",
-    "postgres": "^4.1.1",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "unpdf": "^2.2.1",
-    "zod": "^4.6.7"
-  },
-  "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
-    "@playwright/test": "^1.65.1",
-    "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^22",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "drizzle-kit": "^0.31.11",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.6",
-    "tsx": "^4.23.15",
-    "typescript": "^5",
-    "vitest": "^5.1.1"
+    "dev": "pnpm --filter @vox/web dev",
+    "build": "pnpm --filter @vox/web build",
+    "start": "pnpm --filter @vox/web start",
+    "lint": "pnpm --filter @vox/web lint",
+    "typecheck": "pnpm --filter @vox/web typecheck",
+    "test": "pnpm --filter @vox/web test",
+    "test:e2e": "pnpm --filter @vox/web test:e2e",
+    "db:migrate": "pnpm --filter @vox/web db:migrate",
+    "eval": "pnpm --filter @vox/web eval"
   },
   "packageManager": "pnpm@11.6.0"
 }

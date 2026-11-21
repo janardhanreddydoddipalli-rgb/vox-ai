@@ -14,6 +14,9 @@ jobs:
     # Deterministic only: no real model calls (GEMINI_API_KEY is a dummy, and
     # tests mock fetch). Real-model checks live in evals.yml (manual).
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -71,6 +74,6 @@ jobs:
         with:
           name: playwright-report
           path: |
-            playwright-report/
-            test-results/
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7

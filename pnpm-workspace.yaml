@@ -1,3 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Dependency install scripts are blocked unless listed here (supply-chain
+# protection). esbuild: verifies its platform binary. better-sqlite3: unused.
 allowBuilds:
   better-sqlite3: false
   esbuild: true

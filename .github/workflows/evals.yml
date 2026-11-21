@@ -16,6 +16,9 @@ jobs:
   evals:
     # 20-case scripted-conversation eval against the real model.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -49,6 +52,9 @@ jobs:
   e2e-real-model:
     # Full text interview → scored report → PDF, against the real model.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -90,6 +96,6 @@ jobs:
         with:
           name: playwright-report-real-model
           path: |
-            playwright-report/
-            test-results/
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7
