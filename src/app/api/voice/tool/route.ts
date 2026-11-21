@@ -11,6 +11,7 @@ import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { upsertUserByEmail } from "@/lib/db";
 import { getTool, type ToolContext } from "@/agent/tools";
 import { addAgentStep } from "@/lib/db/repository";
+import { loadInterview } from "@/agent/state";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { startToolSpan } from "@/lib/tracing";
 import "@/agent/tools/all";
@@ -36,8 +37,15 @@ export async function POST(req: NextRequest) {
   const { name, args, interviewId } = parsed.data;
 
   const user = await upsertUserByEmail(session.user.email);
-  const ctx: ToolContext = { userId: user?.id ?? null, interviewId };
-  setSentryUser(user?.id);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(user.id);
+
+  // Ownership: the interview id comes from the browser, so it must belong to
+  // the signed-in user before any tool runs. Not owned → 404 (no existence leak).
+  if (interviewId && !(await loadInterview(interviewId, user.id))) {
+    return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+  }
+  const ctx: ToolContext = { userId: user.id, interviewId };
 
   const tool = getTool(name);
   if (!tool) {
@@ -55,7 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const startedAt = Date.now();
-  const span = startToolSpan({ userId: user?.id ?? "", interviewId: interviewId ?? "", name });
+  const span = startToolSpan({ userId: user.id,interviewId: interviewId ?? "", name });
   try {
     const output = await tool.handler(valid.data, ctx);
     span?.end({ ok: true });

@@ -42,11 +42,11 @@ export async function loadInterview(id: string, userId: string): Promise<Intervi
   };
 }
 
-export async function completeInterview(id: string) {
-  await setInterviewStatus(id, "complete");
+export async function completeInterview(id: string, userId: string) {
+  await setInterviewStatus(id, userId, "complete");
 }
 
-export async function advanceQuestion(id: string) {
-  const row = await bumpInterviewQuestion(id);
+export async function advanceQuestion(id: string, userId: string) {
+  const row = await bumpInterviewQuestion(id, userId);
   return row?.currentQuestionIndex ?? 0;
 }

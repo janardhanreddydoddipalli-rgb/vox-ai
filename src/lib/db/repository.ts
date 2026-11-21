@@ -138,16 +138,22 @@ export async function getInterview(id: string, userId: string) {
   return row ?? null;
 }
 
-export async function setInterviewStatus(id: string, status: "active" | "complete") {
-  const [row] = await db.update(interviews).set({ status }).where(eq(interviews.id, id)).returning();
+// Mutations are user-scoped: a foreign interview id updates nothing and
+// returns null.
+export async function setInterviewStatus(id: string, userId: string, status: "active" | "complete") {
+  const [row] = await db
+    .update(interviews)
+    .set({ status })
+    .where(and(eq(interviews.id, id), eq(interviews.userId, userId)))
+    .returning();
   return row ?? null;
 }
 
-export async function bumpInterviewQuestion(id: string, by = 1) {
+export async function bumpInterviewQuestion(id: string, userId: string, by = 1) {
   const [row] = await db
     .update(interviews)
     .set({ currentQuestionIndex: sql`${interviews.currentQuestionIndex} + ${by}` })
-    .where(eq(interviews.id, id))
+    .where(and(eq(interviews.id, id), eq(interviews.userId, userId)))
     .returning();
   return row ?? null;
 }

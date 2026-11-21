@@ -2,12 +2,9 @@
 // handler }, registered into the global registry on import.
 import { z } from "zod";
 import { GEMINI_MODEL } from "@/lib/config";
-import { listQuestions, getResume, addInterviewQa, countInterviewQa } from "@/lib/db/repository";
-import { db } from "@/lib/db/client";
-import { interviews } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { listQuestions, getResume, getInterview, addInterviewQa, countInterviewQa } from "@/lib/db/repository";
 import { registerTool, type ToolContext } from "./index";
-import { advanceQuestion } from "../state";
+import { advanceQuestion, completeInterview } from "../state";
 
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -29,8 +26,8 @@ const getQuestionInput = z.object({
 // Build a resume-based question ("Tell me about <project>") from the
 // interview's stored resume. Deterministic per question index; null when
 // there is no resume or the projects were already covered.
-async function resumeQuestion(interviewId: string, askedIds: string[]) {
-  const iv = await getInterviewById(interviewId);
+async function resumeQuestion(ctx: ToolContext, askedIds: string[]) {
+  const iv = await ownedInterview(ctx);
   if (!iv?.resumeId) return null;
   const resume = await getResume(iv.resumeId, iv.userId);
   if (!resume || resume.projects.length === 0) return null;
@@ -54,7 +51,7 @@ export const getQuestion = {
 
     // Resume-based question when asked and a resume exists.
     if (use_resume && ctx.interviewId) {
-      const rq = await resumeQuestion(ctx.interviewId, asked_ids);
+      const rq = await resumeQuestion(ctx, asked_ids);
       if (rq) return { ...rq, level };
     }
 
@@ -168,11 +165,13 @@ export const evaluateAnswer = {
   inputSchema: evaluateInput,
   handler: async (input: unknown, ctx: ToolContext) => {
     const { question_id, answer_text } = evaluateInput.parse(input);
+    // Refuse before the paid model call when the interview isn't the caller's.
+    const iv = ctx.interviewId ? await ownedInterview(ctx) : null;
+    if (ctx.interviewId && !iv) return { error: "Interview not found" };
     let questionText = "";
     if (question_id.startsWith("resume:")) {
       // Resume question: recover its text from the stored resume projects.
-      const iv = ctx.interviewId ? await getInterviewById(ctx.interviewId) : null;
-      const resume = iv?.resumeId ? await getResume(iv.resumeId, iv.userId!) : null;
+      const resume = iv?.resumeId ? await getResume(iv.resumeId, iv.userId) : null;
       const project = resume?.projects.find((p) => question_id.includes(p.name));
       questionText = project ? `Tell me about your work on ${project.name}. ${project.summary}` : "Résumé project question";
     } else {
@@ -197,19 +196,22 @@ export const endInterview = {
   inputSchema: endInput,
   handler: async (_input: unknown, ctx: ToolContext) => {
     if (!ctx.interviewId) return { error: "No active interview" };
-    await advanceQuestion(ctx.interviewId);
-    const { completeInterview } = await import("../state");
-    await completeInterview(ctx.interviewId);
+    const iv = await ownedInterview(ctx);
+    if (!iv) return { error: "Interview not found" };
+    await advanceQuestion(iv.id, iv.userId);
+    await completeInterview(iv.id, iv.userId);
     return { status: "complete" };
   },
 };
 
-// Read the interview's resume, if any, as structured JSON.
-async function getInterviewById(id: string) {
-  const [row] = await db.select().from(interviews).where(eq(interviews.id, id)).limit(1);
-  return row ?? null;
+// The context's interview, only if it belongs to the context's user. Every
+// tool goes through this — never load an interview by id alone.
+async function ownedInterview(ctx: ToolContext) {
+  if (!ctx.interviewId || !ctx.userId) return null;
+  return getInterview(ctx.interviewId, ctx.userId);
 }
 
+// Read the interview's resume, if any, as structured JSON.
 export const readResume = {
   name: "read_resume",
   description:
@@ -217,9 +219,10 @@ export const readResume = {
   inputSchema: z.object({}),
   handler: async (_input: unknown, ctx: ToolContext) => {
     if (!ctx.interviewId) return { error: "No active interview" };
-    const iv = await getInterviewById(ctx.interviewId);
-    if (!iv?.resumeId) return { error: "No resume was provided for this interview" };
-    const resume = await getResume(iv.resumeId, iv.userId!);
+    const iv = await ownedInterview(ctx);
+    if (!iv) return { error: "Interview not found" };
+    if (!iv.resumeId) return { error: "No resume was provided for this interview" };
+    const resume = await getResume(iv.resumeId, iv.userId);
     if (!resume) return { error: "Resume not found" };
     return {
       skills: resume.skills,
@@ -233,6 +236,7 @@ export const readResume = {
 // interview report. Called by evaluate_answer's handler.
 async function recordQa(ctx: ToolContext, questionId: string, questionText: string, answerText: string, evaluation: unknown) {
   if (!ctx.interviewId) return;
+  if (!(await ownedInterview(ctx))) return;
   try {
     const order = await countInterviewQa(ctx.interviewId);
     await addInterviewQa({
