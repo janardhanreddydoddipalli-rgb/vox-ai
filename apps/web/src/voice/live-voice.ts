@@ -24,7 +24,7 @@ const VOICE_NAME = "Aoede";
 
 // Everything the live session needs, delivered by POST /api/voice/session:
 // the ephemeral token, the live model id, the system prompt and the agent
-// tool declarations (single source of truth with the text agent).
+// function declarations (single source of truth with the text agent).
 export type LiveSessionConfig = {
   token: string;
   model: string;
@@ -48,6 +48,28 @@ export type LiveVoiceOptions = {
 
 const BUDGET_FALLBACK_MESSAGE = "You've reached today's practice budget, so I'll pause here. It resets tomorrow.";
 
+
+/** The session's first frame: system prompt, tools, audio in/out with a fixed
+ *  voice, and the requested speech language. */
+export function liveSetupMessage(config: LiveSessionConfig, language: string) {
+  return {
+    setup: {
+      model: config.model,
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
+          ...(language ? { languageCode: language.split("-")[0] } : {}),
+        },
+      },
+      inputAudioTranscription: {},
+      outputAudioTranscription: {},
+      systemInstruction: { parts: [{ text: config.systemInstruction }] },
+      // setup.tools holds Tool objects; the declarations go inside one of them.
+      tools: [{ functionDeclarations: config.tools }],
+    },
+  };
+}
 
 type PendingTurn = {
   text: string;
@@ -125,26 +147,7 @@ export class LiveVoice implements VoiceProvider {
       if (!this.closed) this.h.onError("Live voice connection error.");
     };
 
-    // Setup: system prompt, tools, audio in/out with a fixed voice, and the
-    // requested speech language.
-    ws.send(
-      JSON.stringify({
-        setup: {
-          model: this.config.model,
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } },
-              ...(this.language ? { languageCode: this.language.split("-")[0] } : {}),
-            },
-          },
-          inputAudioTranscription: {},
-          outputAudioTranscription: {},
-          systemInstruction: { parts: [{ text: this.config.systemInstruction }] },
-          tools: this.config.tools,
-        },
-      }),
-    );
+    ws.send(JSON.stringify(liveSetupMessage(this.config, this.language)));
 
     await this.startCapture();
     this.h.onMode(this.mode);
