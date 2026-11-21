@@ -6,7 +6,9 @@ import { existsSync, readFileSync } from "node:fs";
 // Minimal .env.local loader (KEY=VALUE lines) so `npm run eval` works without
 // dotenv locally. Optional: in CI the values come from process.env (secrets),
 // and anything already in process.env wins over the file.
-const envFile = new URL("../.env.local", import.meta.url);
+// EVALS_ENV_FILE overrides the path (tests point it at a missing file so a
+// developer's real .env.local never leaks into the test process).
+const envFile = process.env.EVALS_ENV_FILE ?? new URL("../.env.local", import.meta.url);
 if (existsSync(envFile)) {
   for (const line of readFileSync(envFile, "utf8").split("\n")) {
     const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
