@@ -26,7 +26,7 @@ async function seedUser(sql: postgres.Sql, email: string) {
 
 async function rowCounts(sql: postgres.Sql) {
   const tables = await sql<{ table_name: string }[]>`select table_name from information_schema.tables
-    where table_schema = 'public' and table_type = 'BASE TABLE' and table_name <> 'questions'`;
+    where table_schema = 'public' and table_type = 'BASE TABLE' and table_name not in ('questions', 'alembic_version')`;
   const out: Record<string, number> = {};
   for (const { table_name } of tables) out[table_name] = (await sql`select count(*)::int as n from ${sql(table_name)}`)[0].n;
   return out;

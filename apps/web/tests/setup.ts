@@ -1,9 +1,8 @@
 // Test setup: point Drizzle at the dedicated test database. Tests NEVER
 // touch the dev/prod database: src/lib/db/client.ts refuses to boot when
 // NODE_ENV=test unless DATABASE_URL equals TEST_DATABASE_URL.
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
+import { alembicUpgrade } from "../scripts/alembic-upgrade.mjs";
 
 const TEST_URL = process.env.TEST_DATABASE_URL || "postgres://ubuntu:ubuntu@localhost:5432/voicebot_test";
 process.env.TEST_DATABASE_URL = TEST_URL;
@@ -17,18 +16,15 @@ if (process.env.NODE_ENV !== "test") {
   throw new Error("Tests must run with NODE_ENV=test");
 }
 
-// Apply migrations once per test run. No Drizzle migration creates the
-// pgvector extension (0005 assumes it exists), so a fresh test database needs
-// it first. The Alembic baseline (M2) will own this properly.
-const migrator = postgres(TEST_URL, { max: 1 });
-await migrator`CREATE EXTENSION IF NOT EXISTS vector`;
-await migrate(drizzle(migrator), { migrationsFolder: "./drizzle" });
-await migrator.end();
+// Migrate once per test run with Alembic, the only migration tool (it
+// creates pgvector too).
+alembicUpgrade(TEST_URL);
 
 // Per-test cleanup: wipe every table except the seeded question bank. The
 // table list comes from the database, so tables added by later migrations
 // are covered automatically.
-const KEEP_TABLES = new Set(["questions"]);
+// alembic_version records the schema revision; questions is reference data.
+const KEEP_TABLES = new Set(["questions", "alembic_version"]);
 
 export async function resetDb() {
   const sql = postgres(TEST_URL, { max: 1, onnotice: () => {} });

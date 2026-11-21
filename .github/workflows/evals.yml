@@ -44,6 +44,10 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - uses: astral-sh/setup-uv@v6 # Alembic migrates the test DB
+      - name: Install API (Python)
+        working-directory: services/api
+        run: uv sync --frozen
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
       - name: Eval (threshold gate)
@@ -80,6 +84,10 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
+      - uses: astral-sh/setup-uv@v6 # Alembic migrates the test DB
+      - name: Install API (Python)
+        working-directory: services/api
+        run: uv sync --frozen
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
       - name: Migrate (fresh database)

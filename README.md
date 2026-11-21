@@ -79,7 +79,7 @@ Run these from the repo root (each delegates to `@vox/web`). Without `make`, use
 | `make test` | `pnpm test` | Unit + API tests against `TEST_DATABASE_URL` (real Postgres; mocked Gemini) |
 | `make test-e2e` | `pnpm test:e2e` | Playwright smoke tests, no model calls (needs `DATABASE_URL`) |
 | `make build` | `pnpm build` | Production build |
-| `make migrate` | `pnpm db:migrate` | Create pgvector + apply migrations to `DATABASE_URL` |
+| `make migrate` | `pnpm db:migrate` | Alembic upgrade head on `DATABASE_URL` (needs `uv`; empty or Alembic-managed DBs only) |
 | `make check` | | lint + typecheck + test + build |
 | `make api-lint` / `make api-typecheck` | `uv run --directory services/api ruff check .` / `uv run --directory services/api mypy` | API lint, format check, strict types |
 | `make api-test` | `uv run --directory services/api pytest` | API tests on Postgres 18 + pgvector (Docker, or `TEST_DATABASE_URL`) |
@@ -123,7 +123,7 @@ Local: `apps/web/.env.local` (git-ignored). Production: Vercel → Settings → 
 
 - **Schema:** `apps/web/src/lib/db/schema.ts` (Drizzle). All access goes through `src/lib/db/repository.ts`, which scopes every user query.
 - **Migrations: Alembic** (`services/api/alembic`). Baseline `0001` reproduces the frozen Drizzle schema exactly and creates pgvector. New, empty databases: `make api-migrate`. Existing Drizzle-built databases (Neon production): **`alembic stamp 0001`, never upgrade**. See [docs/runbooks/alembic-cutover.md](docs/runbooks/alembic-cutover.md).
-- `apps/web/drizzle` (0000–0008) is **frozen**; `pnpm db:migrate` remains only for the web tests and CI until M4.
+- `apps/web/drizzle` (0000–0008) is **frozen** and no longer applied anywhere: `pnpm db:migrate`, the web tests and the evals run Alembic. A local database built by Drizzle earlier must be recreated or stamped (runbook).
 - **Production (Neon, Singapore):** keep the **direct** connection string in `apps/web/.env.neon.local` (git-ignored, never loaded automatically). The API's own env lives in `services/api/.env` (`services/api/.env.example`).
 
 ## Windows notes

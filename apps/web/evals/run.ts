@@ -13,9 +13,7 @@
 // the pass rate is below EVAL_PASS_THRESHOLD (default 0.9).
 import "./env";
 import { readFileSync } from "node:fs";
-import { drizzle } from "drizzle-orm/postgres-js";
-import { migrate } from "drizzle-orm/postgres-js/migrator";
-import postgres from "postgres";
+import { alembicUpgrade } from "../scripts/alembic-upgrade.mjs";
 import { runAgentLoop, MAX_TOOL_STEPS, type LoopMessage } from "@/agent/loop";
 import { evaluateWithGemini } from "@/agent/tools/interview-tools";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
@@ -152,11 +150,7 @@ async function runCase(testCase: Case, userId: string): Promise<CaseResult> {
 async function main() {
   // Test DB: migrate, wipe, seed the question bank.
   const url = process.env.TEST_DATABASE_URL!;
-  const admin = postgres(url, { max: 1, onnotice: () => {} });
-  // No Drizzle migration creates pgvector; a fresh CI database needs it first.
-  await admin`CREATE EXTENSION IF NOT EXISTS vector`;
-  await migrate(drizzle(admin), { migrationsFolder: "./drizzle" });
-  await admin.end();
+  alembicUpgrade(url);
   await db.execute("TRUNCATE agent_steps, interviews, turns, sessions, users, questions CASCADE" as never);
   await db.insert(questions).values(QUESTION_BANK).onConflictDoNothing();
 
