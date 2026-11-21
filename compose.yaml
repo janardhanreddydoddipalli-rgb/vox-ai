@@ -7,7 +7,7 @@ name: vox
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg18 # matches Neon: Postgres 18.7 + pgvector 0.8.7
     environment:
       POSTGRES_USER: ubuntu
       POSTGRES_PASSWORD: ubuntu # local-only credentials
@@ -15,13 +15,33 @@ services:
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql # pg18+ keeps data in /var/lib/postgresql/18/docker
       - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ubuntu -d voicebot"]
       interval: 2s
       timeout: 5s
       retries: 30
+
+  # FastAPI backend (services/api). Opt-in: `docker compose --profile api up -d --wait`
+  # (make api-up). Needs services/api/.env with JWT_PUBLIC_KEY and INTERNAL_API_TOKEN
+  # (see services/api/.env.example); DB and CORS settings are set here.
+  api:
+    profiles: ["api"]
+    build:
+      context: ./services/api
+      dockerfile: ../../infra/docker/api.Dockerfile
+    env_file:
+      - path: ./services/api/.env
+        required: false
+    environment:
+      DATABASE_URL: postgresql://ubuntu:ubuntu@postgres:5432/voicebot
+      WEB_ORIGIN: http://localhost:3000
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # Not used by the app yet (production rate limiting uses Upstash's REST API).
   # Reserved for the M2+ background workers (arq).

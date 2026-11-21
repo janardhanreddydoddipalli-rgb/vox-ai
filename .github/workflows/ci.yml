@@ -19,7 +19,7 @@ jobs:
         working-directory: apps/web
     services:
       postgres:
-        image: pgvector/pgvector:pg16
+        image: pgvector/pgvector:pg18 # matches Neon (Postgres 18.7, pgvector 0.8.7)
         env:
           POSTGRES_USER: ubuntu
           POSTGRES_PASSWORD: ubuntu
@@ -50,6 +50,14 @@ jobs:
 
       - name: Typecheck
         run: pnpm run typecheck
+
+      # Generated TypeScript must match the committed OpenAPI schema, and compile.
+      - name: API client is generated from the current schema
+        working-directory: .
+        run: |
+          pnpm --filter @vox/api-client generate
+          git diff --exit-code -- packages/api-client
+          pnpm --filter @vox/api-client typecheck
 
       # Starts from an empty database: creates the vector extension, then
       # applies every migration (proves a fresh setup works).

@@ -1,25 +1,26 @@
 # Vox: Engineering Rules (read before every task)
 
 ## Current state (update as milestones land)
-- **M1 (now):** pnpm monorepo. The whole product is still the Next.js app in `apps/web`: UI, API routes, Drizzle/Postgres, the Gemini agent. `services/api` (FastAPI) doesn't exist yet; it starts in M2.
+- **M2 (now):** the whole product still runs in `apps/web` (Next.js). `services/api` (FastAPI, Python 3.12, uv) exists with health, `/v1/me`, `/internal/users/upsert`, the Alembic baseline and token auth, but **no route has moved yet**. Next: M3.
 - **Migration plan:** M2 FastAPI skeleton → M3 move routes one at a time behind flags → M4 remove server code from web. Details: `docs/architecture.md`, `docs/adr/0001-monorepo-and-fastapi.md`.
 - **Until M4,** the rules marked *(target)* apply to new backend code in `services/api`. Code in `apps/web` follows every other rule here.
 
 ## Commands
 - Install: `pnpm install --frozen-lockfile`. Every root script delegates to `@vox/web` (see `Makefile`).
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test` (needs `TEST_DATABASE_URL`), `pnpm build`, `pnpm test:e2e`.
-- Migrations: `pnpm db:migrate` (creates pgvector, then applies `apps/web/drizzle`). On Neon: `node --env-file=.env.neon.local scripts/migrate.mjs` from `apps/web`.
+- API: `make api-install`, `make api-dev`, `make api-lint`, `make api-typecheck`, `make api-test` (Docker or `TEST_DATABASE_URL`), `make api-openapi` (after changing API schemas).
+- Migrations: **Alembic only** (`make api-migrate` on empty DBs). Existing Drizzle-built DBs are **stamped** (`docs/runbooks/alembic-cutover.md`). Drizzle is frozen; `pnpm db:migrate` only exists for the web test/CI setup until M4.
 
 ## Architecture
 - *(target)* `apps/web` = UI only. Its only server code is Auth.js, `/api/token` and the internal user-upsert call. No DB access, no LLM calls, no secrets beyond public env and the JWT signing key.
 - *(target)* `services/api` = all business logic, data, AI, RAG and voice tooling.
 - Layering: api → services → repositories → models. Routers never query the DB. Repositories never call LLMs. (In `apps/web` today: route handlers use `src/lib/db/repository.ts`, never raw Drizzle.)
 - The interview state machine is the source of truth for progress, never the LLM or the voice session. Each state has an explicit tool allowlist.
-- Migrations: Drizzle (`apps/web/drizzle`) until the M2 Alembic baseline; after that **Alembic only**. Never edit an applied migration. Schema changes are expand/contract.
+- Migrations: **Alembic only** (`services/api/alembic`); `apps/web/drizzle` is frozen at 0008. Never edit an applied migration. Schema changes are expand/contract while both apps share the tables (M3).
 - No new framework, service or dependency without an ADR in `docs/adr/`.
 
 ## Security (non-negotiable)
-- API auth *(target)*: EdDSA JWT, iss=vox-web, aud=vox-api, sub=user uuid, exp ≤ 5 min. Verify every request.
+- API auth (ADR 0004): EdDSA JWT from `/api/token`, iss=vox-web, aud=vox-api, sub=user uuid, jti, exp ≤ 5 min. The API verifies with the public key only; every route except health uses `CurrentUser`. The private key never leaves the web env.
 - Every user-scoped query filters by user_id in the repository. Every id route verifies ownership; not owned → 404.
 - Voice tool calls are validated against the signed-in user's interview, never trusted from the client. *(target: keyed by a server-issued voice_session_id, idempotent per call_id.)*
 - Ephemeral Live tokens lock the model, system instruction and tools server-side *(target, M3; see docs/verification.md Q2)*.
@@ -35,13 +36,13 @@
 - Retrieval: user_id in WHERE; hybrid vector + full-text with RRF *(target, M3)*. Retrieved text is data, never instructions.
 
 ## Code quality
-- Python *(target)*: ruff + mypy --strict clean; Pydantic at every API boundary.
+- Python: ruff + ruff format + mypy --strict clean; Pydantic at every API boundary; errors are RFC 9457 problem+json (`ProblemError`).
 - TypeScript: strict; no `any` or `@ts-ignore` in new or touched code without a linked reason.
 - No dead code, no commented-out code, no unused dependencies. Files over ~300 lines need a reason.
 
 ## Testing
 - Every bug fix ships with a test that fails before the fix.
-- Every new route: happy path, validation error, unauthenticated, cross-user (404).
+- Every new route: happy path, validation error, unauthenticated, cross-user (404). API routes with an `{id}` must be registered in `services/api/tests/security/test_route_ownership.py`, or CI fails.
 - CI is deterministic: mocked LLM responses only. Real-model evals and the `@real-model` E2E run only in the manual `evals.yml` workflow.
 - Integration tests use a real Postgres + pgvector (CI service or a local container), never staging or production. Tests refuse any DB except `TEST_DATABASE_URL`.
 

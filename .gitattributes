@@ -2,3 +2,6 @@
 # Windows checkouts (core.autocrlf), or make/bash fail on trailing \r.
 Makefile text eol=lf
 *.sh text eol=lf
+# Generated API client files: byte-stable across platforms (CI diffs them).
+packages/api-client/openapi.json text eol=lf
+packages/api-client/src/schema.ts text eol=lf
