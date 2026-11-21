@@ -15,13 +15,9 @@ const SYSTEM_PROMPT =
 
 type HistoryTurn = { role: "user" | "assistant"; text: string };
 
-// GET reports which brain is live so the client can label the session.
-export async function GET() {
-  return NextResponse.json({ engine: process.env.GEMINI_API_KEY ? "gemini" : "browser", model: MODEL });
-}
-
-// POST generates the spoken reply. Uses Gemini Flash when GEMINI_API_KEY is set
+// POST-only: generates the spoken reply. Uses Gemini Flash when GEMINI_API_KEY is set
 // (Vault), otherwise falls back to deterministic local responses.
+// Engine/model info lives at GET /api/health.
 export async function POST(req: NextRequest) {
   if (!originAllowed(req)) return blockedOrigin();
   const limited = checkRate(req, "chat");
