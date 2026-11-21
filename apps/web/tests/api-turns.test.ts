@@ -87,6 +87,21 @@ describe("POST /api/turns", () => {
 });
 
 describe("cross-user isolation", () => {
+  it("user A cannot write into user B's session (and never sees B's turns)", async () => {
+    const bSid = uniqueSid();
+    authState.asB();
+    await turnsPost(postReq({ sessionId: bSid, mode: "gemini", turns: [{ role: "user", text: "B private answer" }] }));
+
+    authState.asA();
+    const res = await turnsPost(postReq({ sessionId: bSid, turns: [{ role: "user", text: "injected by A" }] }));
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain("B private answer");
+
+    authState.asB();
+    const own = await (await turnsGet(getReq(`?sessionId=${bSid}`))).json();
+    expect(own.turns.map((t: any) => t.text)).toEqual(["B private answer"]);
+  });
+
   it("user A cannot read user B's sessions", async () => {
     const bSid = uniqueSid();
     authState.asB();

@@ -41,3 +41,44 @@ async def test_cross_user_ids_never_leak_existence(
     random = await client.delete(f"/v1/memories/{uuid.uuid4()}", headers=headers)
     assert theirs.status_code == random.status_code == 404
     assert theirs.json()["detail"] == random.json()["detail"]
+
+
+async def test_post_turns_into_another_users_session_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    owner = await insert_user(database_url)
+    attacker = await insert_user(database_url)
+    sid = f"s-{uuid.uuid4().hex[:10]}"
+    await client.post(
+        f"/v1/sessions/{sid}/turns",
+        json={"turns": [{"role": "user", "text": "owner private answer"}]},
+        headers={"Authorization": f"Bearer {mint_token(owner)}"},
+    )
+
+    res = await client.post(
+        f"/v1/sessions/{sid}/turns",
+        json={"turns": [{"role": "user", "text": "injected"}]},
+        headers={"Authorization": f"Bearer {mint_token(attacker)}"},
+    )
+
+    assert res.status_code == 404
+    assert "owner private answer" not in res.text
+    assert await count_rows(database_url, "turns", "session_id = $1", sid) == 1
+
+
+async def test_get_turns_of_another_users_session_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    owner = await insert_user(database_url)
+    attacker = await insert_user(database_url)
+    sid = f"s-{uuid.uuid4().hex[:10]}"
+    await client.post(
+        f"/v1/sessions/{sid}/turns",
+        json={"turns": [{"role": "user", "text": "owner private answer"}]},
+        headers={"Authorization": f"Bearer {mint_token(owner)}"},
+    )
+    res = await client.get(
+        f"/v1/sessions/{sid}/turns", headers={"Authorization": f"Bearer {mint_token(attacker)}"}
+    )
+    assert res.status_code == 404
+    assert "owner private answer" not in res.text

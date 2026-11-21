@@ -19,6 +19,10 @@ from vox_api.main import create_app
 # "METHOD /path/{param}" -> "module:test_function" in tests.security
 CROSS_USER_TESTS: dict[str, str] = {
     "DELETE /v1/memories/{memory_id}": "test_cross_user:test_delete_memory_of_another_user_is_404",
+    "POST /v1/sessions/{session_id}/turns": (
+        "test_cross_user:test_post_turns_into_another_users_session_is_404"
+    ),
+    "GET /v1/sessions/{session_id}/turns": "test_cross_user:test_get_turns_of_another_users_session_is_404",
 }
 
 

@@ -1,6 +1,30 @@
 {
   "components": {
     "schemas": {
+      "AllTurns": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sessions",
+            "type": "array"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions",
+          "turns"
+        ],
+        "title": "AllTurns",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -137,6 +161,232 @@
           }
         },
         "title": "Readiness",
+        "type": "object"
+      },
+      "SessionTurns": {
+        "properties": {
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/Turn"
+            },
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "turns"
+        ],
+        "title": "SessionTurns",
+        "type": "object"
+      },
+      "Turn": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "first_token_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Token Ms"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "session_id": {
+            "title": "Session Id",
+            "type": "string"
+          },
+          "stt_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Ms"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "total_llm_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Llm Ms"
+          },
+          "tts_start_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tts Start Ms"
+          }
+        },
+        "required": [
+          "id",
+          "session_id",
+          "role",
+          "text",
+          "latency_ms",
+          "stt_ms",
+          "first_token_ms",
+          "total_llm_ms",
+          "tts_start_ms",
+          "created_at"
+        ],
+        "title": "Turn",
+        "type": "object"
+      },
+      "TurnIn": {
+        "properties": {
+          "first_token_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Token Ms"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "stt_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stt Ms"
+          },
+          "text": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "total_llm_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Llm Ms"
+          },
+          "tts_start_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tts Start Ms"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "TurnIn",
+        "type": "object"
+      },
+      "TurnsIn": {
+        "properties": {
+          "mode": {
+            "default": "browser",
+            "enum": [
+              "gemini",
+              "browser"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "turns": {
+            "items": {
+              "$ref": "#/components/schemas/TurnIn"
+            },
+            "maxItems": 200,
+            "title": "Turns",
+            "type": "array"
+          }
+        },
+        "required": [
+          "turns"
+        ],
+        "title": "TurnsIn",
         "type": "object"
       },
       "ValidationError": {
@@ -338,6 +588,149 @@
         "summary": "Forget one memory",
         "tags": [
           "memories"
+        ]
+      }
+    },
+    "/v1/sessions/{session_id}/turns": {
+      "get": {
+        "operationId": "session_turns_v1_sessions__session_id__turns_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTurns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One of my sessions",
+        "tags": [
+          "turns"
+        ]
+      },
+      "post": {
+        "operationId": "save_turns_v1_sessions__session_id__turns_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._:-]+$",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TurnsIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionTurns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Append turns to my session (created on first save)",
+        "tags": [
+          "turns"
+        ]
+      }
+    },
+    "/v1/turns": {
+      "get": {
+        "operationId": "list_turns_v1_turns_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllTurns"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "All my sessions and their turns",
+        "tags": [
+          "turns"
         ]
       }
     }

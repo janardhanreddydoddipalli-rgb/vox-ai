@@ -9,6 +9,8 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Terms page (Phase 13, launch).** The footer link to `/terms` was removed because the page didn't exist (decision 2026-11-22). Add a Terms of Service page and restore the link at launch; `tests/internal-links.test.ts` will fail if the link returns before the page does.
 
+- **Playground text mode.** When the mic or speech engine fails with a generic error, the playground shows "Could not start" instead of falling back to text mode (only `NotAllowedError`/`NotFoundError` trigger it), so browsers without speech support can't chat there.
+
 ## M3
 
 - Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).
