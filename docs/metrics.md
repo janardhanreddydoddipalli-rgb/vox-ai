@@ -34,15 +34,15 @@ Each run is 1 opening turn plus 3 answers, then the report, so `RUNS=5` gives 20
 
 | Metric | p50 | p95 | n | Status |
 |---|---|---|---|---|
-| Time to first token | — | — | — | NOT MEASURED |
-| Turn total | — | — | — | NOT MEASURED |
-| Report generation | — | — | — | NOT MEASURED |
-| Time to first audio (live) | — | — | — | NOT MEASURED |
+| Time to first token | — | — | — | DEFERRED |
+| Turn total | — | — | — | DEFERRED |
+| Report generation | — | — | — | DEFERRED |
+| Time to first audio (live) | — | — | — | DEFERRED |
 
 **Why it's still empty:**
 - The harness was checked mechanically on 2026-11-21 against a local dev server with no key (sign-in, interview start and SSE parsing all worked).
 - A real run on 2026-11-21 against a local production build reached the model, which answered `429 RESOURCE_EXHAUSTED`: the key is on the free tier, 20 `generateContent` requests per day, already used up.
 
-**Owner:** rerun with a paid-tier key (or on a fresh quota day) before M1 merges. See `docs/verification.md` Q4.
+**Status: DEFERRED (decided 2026-11-21).** Gemini billing is postponed, so there is no paid-tier key yet. The baseline will be run once billing is on and the key is rotated (`docs/verification.md` Q4). Until then, the M3 rule "no worse than baseline" can't be checked numerically. Each M3 route move must instead note the time to first token from the UI latency pill on the same machine, before and after the move.
 
 The only earlier figures are anecdotal ones from the README's device-testing table (first audio about 0.6–1.2 s on Chrome desktop, about 0.8–1.5 s on Android). They weren't measured with this method, so they aren't a baseline.
