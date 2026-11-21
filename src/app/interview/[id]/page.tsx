@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { VoiceEngine, type Turn } from "@/lib/voice-engine";
+import { VoiceEngine, type Turn } from "@/voice/engine";
 
 type InterviewInfo = {
   id: string;
@@ -12,6 +12,7 @@ type InterviewInfo = {
   status: string;
   questionCount: number;
   hasResume: boolean;
+  language?: string;
   error?: string;
 };
 
@@ -75,12 +76,14 @@ function InterviewClient({ interviewId, router }: { interviewId: string; router:
       },
       onPartial: setPartial,
       onReplyPartial: setReplyPartial,
-      onError: () => {},
+      onError: (m) => console.warn("voice:", m),
       onMode: () => {},
       onLevel: () => {},
       onOffline: () => {},
+      onFallback: (from, to, reason) => console.warn(`voice fallback ${from} → ${to}: ${reason}`),
     });
     engine.interviewId = interviewId;
+    engine.language = info.language ?? "en";
     engineRef.current = engine;
     engine.start().catch(() => {
       // mic unavailable — text mode still works

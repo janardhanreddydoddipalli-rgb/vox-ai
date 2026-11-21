@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { VoiceEngine, type Turn, type VoiceMode } from "@/lib/voice-engine";
+import { VoiceEngine, type Turn, type VoiceMode } from "@/voice/engine";
 
 type Status = "idle" | "listening" | "thinking" | "speaking";
 
@@ -28,6 +28,7 @@ export default function Home() {
   const [mode, setMode] = useState<VoiceMode | null>(null);
   const [level, setLevel] = useState(0);
   const [elapsed, setElapsed] = useState(0);
+  const [lastLatency, setLastLatency] = useState<{ mode: VoiceMode; latency: NonNullable<VoiceEngine["latency"]> } | null>(null);
   const engine = useRef<VoiceEngine | null>(null);
   const sid = useRef(sessionId());
   const saved = useRef(0);
@@ -109,6 +110,9 @@ export default function Home() {
         setTurns((prev) => [...prev, t]);
         setPartial("");
         setReplyPartial("");
+        if (t.role === "assistant" && engine.current?.latency) {
+          setLastLatency({ mode: engine.current.mode ?? "browser", latency: engine.current.latency });
+        }
       },
       onPartial: setPartial,
       onReplyPartial: setReplyPartial,
@@ -116,6 +120,12 @@ export default function Home() {
       onMode: setMode,
       onLevel: setLevel,
       onOffline: setOffline,
+      onFallback: (from, to, reason) => {
+        console.warn(`voice fallback ${from} → ${to}: ${reason}`);
+        if (to === "browser" && from === "live") {
+          setError(`Live voice unavailable (${reason}) — using browser speech instead.`);
+        }
+      },
     });
     try {
       await engine.current.start();
@@ -189,7 +199,12 @@ export default function Home() {
             History
           </a>
           {offline && <span className="pill pill-offline">Offline mode</span>}
-          {mode && <span className="pill">{mode === "gemini" ? "Gemini · Flash" : "Browser speech"}</span>}
+          {mode && <span className="pill">{mode === "live" ? "Gemini Live" : "Browser speech"}</span>}
+          {lastLatency && (
+            <span className="pill" title={`connect ${lastLatency.latency.connectMs ?? "—"} ms · first audio ${lastLatency.latency.ttsStartMs ?? "—"} ms`}>
+              {lastLatency.mode === "live" ? "Live" : "Browser"}: {lastLatency.latency.totalMs ?? lastLatency.latency.totalLlmMs ?? "?"} ms
+            </span>
+          )}
           {active && <span className="pill">{mm}:{ss}</span>}
         </div>
       </header>
