@@ -11,6 +11,7 @@ import { languageDirective } from "@/lib/languages";
 import { startInterview, loadInterview } from "@/agent/state";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { startTurnTrace } from "@/lib/tracing";
+import { checkDailyBudget, recordTokenUsage } from "@/lib/cost-guard";
 import type { LoopResult } from "@/agent/loop";
 import "@/agent/tools/all";
 
@@ -137,7 +138,13 @@ export async function POST(req: NextRequest) {
         });
         try {
           const loopHistory: LoopMessage[] = history.map((t) => ({ role: t.role === "assistant" ? "model" : "user", text: t.text }));
-          const trace = startTurnTrace({ userId, interviewId: interview.id, sessionId: interview.id, provider: "text-gemini" });
+          const budget = await checkDailyBudget(userId);
+        if (!budget.allowed) {
+          send("done", { total_llm_ms: 0, budget_exceeded: true, message: budget.message });
+          finish();
+          return;
+        }
+        const trace = startTurnTrace({ userId, interviewId: interview.id, sessionId: interview.id, provider: "text-gemini" });
           let result: LoopResult;
           try {
             result = await runAgentLoop(
@@ -162,6 +169,7 @@ export async function POST(req: NextRequest) {
             toolSteps: result.steps,
             hitStepLimit: result.hitStepLimit,
           });
+          await recordTokenUsage(userId, result.tokensIn, result.tokensOut).catch((e) => console.error("usage record failed", e));
           for (const step of result.steps) send("tool", { name: step.toolName, step: step.stepIndex, duration_ms: step.durationMs });
           send("done", {
             total_llm_ms: Date.now() - startedAt,

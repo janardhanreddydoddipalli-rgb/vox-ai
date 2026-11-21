@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, index, foreignKey, jsonb, vector } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, index, foreignKey, jsonb, vector, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -163,8 +163,7 @@ export const turns = pgTable(
     totalLlmMs: integer("total_llm_ms"),
     ttsStartMs: integer("tts_start_ms"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [
+  },  (t) => [
     foreignKey({
       columns: [t.sessionId],
       foreignColumns: [sessions.id],
@@ -172,4 +171,21 @@ export const turns = pgTable(
     }).onDelete("cascade"),
     index("turns_session_id_idx").on(t.sessionId),
   ],
+);
+
+// Daily token usage per user for the Phase 7 cost guard. One row per
+// user+day, incremented after every agent turn. No message content stored.
+export const tokenUsage = pgTable(
+  "token_usage",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    day: text("day").notNull(), // UTC date, e.g. 2026-11-21
+    tokensIn: integer("tokens_in").notNull().default(0),
+    tokensOut: integer("tokens_out").notNull().default(0),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("token_usage_user_day_key").on(t.userId, t.day)],
 );

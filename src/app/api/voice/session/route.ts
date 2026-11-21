@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
+import { upsertUserByEmail } from "@/lib/db";
+import { checkDailyBudget } from "@/lib/cost-guard";
 import { GEMINI_LIVE_MODEL } from "@/lib/config";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
@@ -30,6 +32,12 @@ export async function POST(req: NextRequest) {
   const limit = await checkRate(req, "chat", session.user.email);
   if (limit) return limit;
   setSentryUser(session.user.id ?? undefined);
+
+  const user = await upsertUserByEmail(session.user.email);
+  const budget = user ? await checkDailyBudget(user.id) : null;
+  if (budget && !budget.allowed) {
+    return NextResponse.json({ error: "budget_exceeded", message: budget.message }, { status: 429 });
+  }
 
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) {

@@ -34,3 +34,43 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  evals:
+    # Prompt/model quality gate: the 20-case scripted-conversation eval must
+    # pass at the configured threshold (EVAL_PASS_THRESHOLD, default 90%).
+    # Needs a real GEMINI_API_KEY — skipped (not failed) when absent, so PRs
+    # from forks without the secret still go green.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: ubuntu
+          POSTGRES_PASSWORD: ubuntu
+          POSTGRES_DB: voicebot_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ubuntu"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      EVAL_PASS_THRESHOLD: "0.9"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Eval (threshold gate)
+        if: ${{ env.GEMINI_API_KEY != '' }}
+        run: npm run eval
+
+      - name: Skip note
+        if: ${{ env.GEMINI_API_KEY == '' }}
+        run: echo "GEMINI_API_KEY not set — eval job skipped."
