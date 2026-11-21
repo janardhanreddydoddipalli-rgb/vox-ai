@@ -47,6 +47,17 @@ export default function Home() {
     return () => engine.current?.stop();
   }, []);
 
+  // Latest-value refs so flush and pagehide see current state without
+  // re-binding callbacks.
+  const turnsRef = useRef(turns);
+  const partialRef = useRef(partial);
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    turnsRef.current = turns;
+    partialRef.current = partial;
+    modeRef.current = mode;
+  }, [turns, partial, mode]);
+
   const flush = useCallback((extra?: Turn) => {
     const all = extra ? [...turnsRef.current, extra] : [...turnsRef.current];
     if (all.length === saved.current) return;
@@ -57,18 +68,12 @@ export default function Home() {
     })
       .then(() => (saved.current = all.length))
       .catch(() => {});
-  }, [mode]);
+  }, []);
 
-  // keep a ref so flush sees latest turns without re-binding
-  const turnsRef = useRef(turns);
-  const partialRef = useRef(partial);
-  const modeRef = useRef(mode);
+  // Auto-save after every completed exchange.
   useEffect(() => {
-    turnsRef.current = turns;
-    partialRef.current = partial;
-    modeRef.current = mode;
     if (turns.length >= 2 && turns.length % 2 === 0) flush();
-  }, [turns, partial, mode, flush]);
+  }, [turns, flush]);
 
   // Page closing: flush unsaved turns (including a partial in-flight turn)
   // via sendBeacon, which survives unload where fetch may not.
