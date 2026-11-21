@@ -1,9 +1,13 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import Resend from "next-auth/providers/resend";
+import Credentials from "next-auth/providers/credentials";
+
+const e2eEnabled = process.env.E2E_TEST_AUTH === "1";
 
 // Auth.js v5. Google OAuth + email magic link (Resend). Credentials come from
 // env (Vercel env settings in prod); providers activate when configured.
+// E2E_TEST_AUTH=1 adds a credentials provider used only by the Playwright run.
 export const authConfig: NextAuthConfig = {
   providers: [
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
@@ -11,6 +15,19 @@ export const authConfig: NextAuthConfig = {
       : []),
     ...(process.env.RESEND_API_KEY
       ? [Resend({ from: process.env.EMAIL_FROM ?? "Vox <onboarding@resend.dev>" })]
+      : []),
+    ...(e2eEnabled
+      ? [
+          Credentials({
+            name: "Test sign-in",
+            credentials: { email: { label: "Email", type: "email" } },
+            authorize(credentials) {
+              const email = String(credentials?.email ?? "").trim();
+              if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return null;
+              return { id: email, email, name: email.split("@")[0] };
+            },
+          }),
+        ]
       : []),
   ],
   session: { strategy: "jwt" },

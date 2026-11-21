@@ -10,6 +10,7 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
 
   const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   const emailEnabled = Boolean(process.env.RESEND_API_KEY);
+  const e2eButton = process.env.E2E_TEST_AUTH === "1";
 
   return (
     <main style={{ maxWidth: 420, margin: "80px auto", padding: 24, textAlign: "center" }}>
@@ -40,11 +41,24 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
           </button>
         </form>
       )}
-      {!googleEnabled && !emailEnabled && (
+      {!googleEnabled && !emailEnabled && !e2eButton && (
         <p className="error">
           No sign-in provider is configured. Set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (OAuth) or
           RESEND_API_KEY (magic link) in the environment.
         </p>
+      )}
+      {e2eButton && (
+        <form
+          action={async (fd: FormData) => {
+            "use server";
+            await signIn("credentials", { email: fd.get("email"), redirectTo: callbackUrl });
+          }}
+        >
+          <input name="email" type="email" required placeholder="you@example.com" aria-label="Email" />
+          <button className="btn" type="submit">
+            Test sign-in
+          </button>
+        </form>
       )}
     </main>
   );

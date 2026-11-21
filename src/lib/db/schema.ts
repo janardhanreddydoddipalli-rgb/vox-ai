@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, integer, timestamp, index, foreignKey, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, integer, timestamp, index, foreignKey, jsonb, vector } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -113,6 +113,40 @@ export const agentSteps = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("agent_steps_interview_id_idx").on(t.interviewId)],
+);
+
+// Long-term memory learned from past interviews. Embeddings are Gemini
+// embeddings at 768 dimensions; cosine search runs in pgvector.
+export const userMemories = pgTable(
+  "user_memories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // strength | weakness | preference
+    text: text("text").notNull(),
+    embedding: vector("embedding", { dimensions: 768 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("user_memories_user_id_idx").on(t.userId)],
+);
+
+// Chunks of the candidate's own documents (resume, job description) for
+// retrieval during interviews.
+export const docChunks = pgTable(
+  "doc_chunks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    source: text("source").notNull(), // resume | jd
+    text: text("text").notNull(),
+    embedding: vector("embedding", { dimensions: 768 }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("doc_chunks_user_id_idx").on(t.userId)],
 );
 
 export const turns = pgTable(

@@ -3,7 +3,7 @@
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 
-const { users, sessions, turns, interviews, questions, agentSteps, resumes, interviewQa } = schema;
+const { users, sessions, turns, interviews, questions, agentSteps, resumes, interviewQa, userMemories, docChunks } = schema;
 
 export type Mode = "gemini" | "browser";
 export type TurnRow = {
@@ -237,6 +237,99 @@ export async function latestQaScores(userId: string) {
     .where(eq(interviews.userId, userId))
     .orderBy(interviewQa.createdAt);
   return rows;
+}
+
+// --- memories + document chunks (pgvector) ---------------------------------
+export type MemoryKind = "strength" | "weakness" | "preference";
+
+// pgvector literal: '[0.12,0.34,...]'
+export function vectorLiteral(embedding: number[]): string {
+  return `[${embedding.join(",")}]`;
+}
+
+export async function createMemory(row: { userId: string; kind: MemoryKind; text: string; embedding: number[] }) {
+  const [r] = await db
+    .insert(userMemories)
+    .values({ userId: row.userId, kind: row.kind, text: row.text, embedding: row.embedding })
+    .returning({ id: userMemories.id, kind: userMemories.kind, text: userMemories.text, createdAt: userMemories.createdAt });
+  return r;
+}
+
+export async function listMemories(userId: string) {
+  return db
+    .select({ id: userMemories.id, kind: userMemories.kind, text: userMemories.text, createdAt: userMemories.createdAt })
+    .from(userMemories)
+    .where(eq(userMemories.userId, userId))
+    .orderBy(desc(userMemories.createdAt));
+}
+
+export async function getMemory(id: string, userId: string) {
+  const [r] = await db
+    .select({ id: userMemories.id })
+    .from(userMemories)
+    .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)))
+    .limit(1);
+  return r ?? null;
+}
+
+export async function deleteMemory(id: string, userId: string) {
+  const [r] = await db
+    .delete(userMemories)
+    .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)))
+    .returning({ id: userMemories.id });
+  return r ?? null;
+}
+
+// All memories of one kind for a user (used to prioritise questions).
+export async function listMemoriesByKind(userId: string, kind: MemoryKind, limit = 10) {
+  return db
+    .select({ id: userMemories.id, text: userMemories.text, createdAt: userMemories.createdAt })
+    .from(userMemories)
+    .where(and(eq(userMemories.userId, userId), eq(userMemories.kind, kind)))
+    .orderBy(desc(userMemories.createdAt))
+    .limit(limit);
+}
+
+// Nearest memories by cosine distance, scoped to one user. Raw SQL because
+// pgvector's `<=>` operator is not part of Drizzle's query builder.
+export async function findSimilarMemories(userId: string, embedding: number[], limit = 5, kinds?: MemoryKind[]) {
+  const vec = vectorLiteral(embedding);
+  const kindFilter = kinds && kinds.length > 0 ? sql` and kind = any(${kinds})` : sql``;
+  const res = (await db.execute(
+    sql`select id::text, kind, text, 1 - (embedding <=> ${vec}::vector) as similarity
+        from user_memories
+        where user_id = ${userId}${kindFilter}
+        order by embedding <=> ${vec}::vector
+        limit ${limit}`,
+  )) as unknown as { id: string; kind: MemoryKind; text: string; similarity: string }[];
+  return res.map((r) => ({
+    ...r,
+    similarity: Number(r.similarity),
+  }));
+}
+
+export async function createDocChunk(row: { userId: string; source: "resume" | "jd"; text: string; embedding: number[] }) {
+  await db.insert(docChunks).values({ userId: row.userId, source: row.source, text: row.text, embedding: row.embedding });
+}
+
+// Replace a user's indexed chunks for one source (idempotent re-indexing).
+export async function deleteDocChunksForUser(userId: string, source: "resume" | "jd") {
+  await db.delete(docChunks).where(and(eq(docChunks.userId, userId), eq(docChunks.source, source)));
+}
+
+export async function searchDocChunks(userId: string, embedding: number[], limit = 5) {
+  const vec = vectorLiteral(embedding);
+  const res = (await db.execute(
+    sql`select id::text, source, text, 1 - (embedding <=> ${vec}::vector) as similarity
+        from doc_chunks
+        where user_id = ${userId}
+        order by embedding <=> ${vec}::vector
+        limit ${limit}`,
+  )) as unknown as { id: string; source: "resume" | "jd"; text: string; similarity: string }[];
+  return res.map((r) => ({
+    ...r,
+    similarity: Number(r.similarity),
+  }));
 }
 
 // --- deletion (privacy) --------------------------------------------------
