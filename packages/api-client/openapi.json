@@ -1,6 +1,69 @@
 {
   "components": {
     "schemas": {
+      "AgentStepOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "input": {
+            "additionalProperties": true,
+            "title": "Input",
+            "type": "object"
+          },
+          "output": {
+            "additionalProperties": true,
+            "title": "Output",
+            "type": "object"
+          },
+          "step_index": {
+            "title": "Step Index",
+            "type": "integer"
+          },
+          "tool_name": {
+            "title": "Tool Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "step_index",
+          "tool_name",
+          "input",
+          "output",
+          "duration_ms",
+          "created_at"
+        ],
+        "title": "AgentStepOut",
+        "type": "object"
+      },
+      "AgentSteps": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AgentStepOut"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "title": "AgentSteps",
+        "type": "object"
+      },
       "AllTurns": {
         "properties": {
           "sessions": {
@@ -23,6 +86,93 @@
           "turns"
         ],
         "title": "AllTurns",
+        "type": "object"
+      },
+      "Body_create_interview_v1_interviews_post": {
+        "properties": {
+          "job_description": {
+            "default": "",
+            "maxLength": 8000,
+            "title": "Job Description",
+            "type": "string"
+          },
+          "language": {
+            "default": "en",
+            "enum": [
+              "en",
+              "hi",
+              "ta",
+              "te"
+            ],
+            "title": "Language",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "junior",
+              "mid",
+              "senior"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "resume": {
+            "anyOf": [
+              {
+                "contentMediaType": "application/octet-stream",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resume"
+          },
+          "role": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "level"
+        ],
+        "title": "Body_create_interview_v1_interviews_post",
+        "type": "object"
+      },
+      "DeletedAccount": {
+        "properties": {
+          "sessions_deleted": {
+            "title": "Sessions Deleted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sessions_deleted"
+        ],
+        "title": "DeletedAccount",
+        "type": "object"
+      },
+      "EndResult": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "report": {
+            "additionalProperties": true,
+            "title": "Report",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "report"
+        ],
+        "title": "EndResult",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -48,6 +198,172 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "InterviewCreated": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "InterviewCreated",
+        "type": "object"
+      },
+      "InterviewDetail": {
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_question_index": {
+            "title": "Current Question Index",
+            "type": "integer"
+          },
+          "has_resume": {
+            "title": "Has Resume",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "qa": {
+            "items": {
+              "$ref": "#/components/schemas/QaItem"
+            },
+            "title": "Qa",
+            "type": "array"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "level",
+          "status",
+          "language",
+          "has_resume",
+          "current_question_index",
+          "created_at",
+          "completed_at",
+          "report",
+          "qa"
+        ],
+        "title": "InterviewDetail",
+        "type": "object"
+      },
+      "InterviewList": {
+        "properties": {
+          "interviews": {
+            "items": {
+              "$ref": "#/components/schemas/InterviewSummary"
+            },
+            "title": "Interviews",
+            "type": "array"
+          }
+        },
+        "required": [
+          "interviews"
+        ],
+        "title": "InterviewList",
+        "type": "object"
+      },
+      "InterviewSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "level": {
+            "title": "Level",
+            "type": "string"
+          },
+          "overall": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overall"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "level",
+          "status",
+          "language",
+          "overall",
+          "created_at"
+        ],
+        "title": "InterviewSummary",
         "type": "object"
       },
       "Me": {
@@ -145,6 +461,66 @@
         "title": "MemoryList",
         "type": "object"
       },
+      "QaItem": {
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "evaluation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evaluation"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id"
+          }
+        },
+        "required": [
+          "id",
+          "order",
+          "question_id",
+          "question",
+          "answer",
+          "evaluation",
+          "created_at"
+        ],
+        "title": "QaItem",
+        "type": "object"
+      },
       "Readiness": {
         "properties": {
           "database": {
@@ -161,6 +537,99 @@
           }
         },
         "title": "Readiness",
+        "type": "object"
+      },
+      "ScoreList": {
+        "properties": {
+          "scores": {
+            "items": {
+              "$ref": "#/components/schemas/ScorePoint"
+            },
+            "title": "Scores",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scores"
+        ],
+        "title": "ScoreList",
+        "type": "object"
+      },
+      "ScorePoint": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "interview_id": {
+            "format": "uuid",
+            "title": "Interview Id",
+            "type": "string"
+          },
+          "order": {
+            "title": "Order",
+            "type": "integer"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "required": [
+          "interview_id",
+          "order",
+          "score",
+          "created_at"
+        ],
+        "title": "ScorePoint",
+        "type": "object"
+      },
+      "SessionList": {
+        "properties": {
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SessionSummary"
+            },
+            "title": "Sessions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sessions"
+        ],
+        "title": "SessionList",
+        "type": "object"
+      },
+      "SessionSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "mode",
+          "created_at"
+        ],
+        "title": "SessionSummary",
         "type": "object"
       },
       "SessionTurns": {
@@ -489,7 +958,336 @@
         ]
       }
     },
+    "/v1/interviews": {
+      "get": {
+        "operationId": "list_interviews_v1_interviews_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My interviews, newest first (max 50)",
+        "tags": [
+          "interviews"
+        ]
+      },
+      "post": {
+        "operationId": "create_interview_v1_interviews_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_interview_v1_interviews_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Unreadable or oversized r\u00e9sum\u00e9"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start an interview (optionally with a r\u00e9sum\u00e9 PDF and a job description)",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/scores": {
+      "get": {
+        "operationId": "list_scores_v1_interviews_scores_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoreList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Every answered question's score across my interviews (oldest first)",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{interview_id}": {
+      "get": {
+        "operationId": "get_interview_v1_interviews__interview_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Interview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One of my interviews with its answers",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{interview_id}/end": {
+      "post": {
+        "operationId": "end_interview_v1_interviews__interview_id__end_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Interview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "Report generation failed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "End the interview: generate (or reuse) the report, then distill memories",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{interview_id}/report.pdf": {
+      "get": {
+        "operationId": "report_as_pdf_v1_interviews__interview_id__report_pdf_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Interview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/pdf": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The report as a PDF",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{interview_id}/steps": {
+      "get": {
+        "operationId": "agent_steps_v1_interviews__interview_id__steps_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Interview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSteps"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Agent tool steps (debugging)",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
     "/v1/me": {
+      "delete": {
+        "operationId": "delete_me_v1_me_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedAccount"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete my account and everything I own",
+        "tags": [
+          "account"
+        ]
+      },
       "get": {
         "operationId": "me_v1_me_get",
         "responses": {
@@ -588,6 +1386,32 @@
         "summary": "Forget one memory",
         "tags": [
           "memories"
+        ]
+      }
+    },
+    "/v1/sessions": {
+      "get": {
+        "operationId": "list_sessions_v1_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "My playground sessions, newest first",
+        "tags": [
+          "account"
         ]
       }
     },

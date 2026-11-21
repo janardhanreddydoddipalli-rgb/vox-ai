@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { upsertUserByEmail, getInterview, listInterviewQa } from "@/lib/db";
 import { generateReportForInterview } from "@/agent/report";
 import { summarizeInterviewToMemories } from "@/agent/memory";
+import { routeTarget } from "@/lib/route-flags";
+import { endInterviewViaApi } from "@/lib/interviews";
 
 // End the interview: generate (or reuse) the report and mark it complete.
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -13,6 +15,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  if (routeTarget("INTERVIEWS") === "fastapi") return endInterviewViaApi(user.id, id);
   const iv = await getInterview(id, user.id);
   if (!iv) return NextResponse.json({ error: "Interview not found" }, { status: 404 });
   if (iv.report) return NextResponse.json({ id: iv.id, report: iv.report });

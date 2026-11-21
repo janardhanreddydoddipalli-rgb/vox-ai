@@ -9,6 +9,15 @@ export function apiFor(userId: string) {
   return createVoxApiClient({ baseUrl, getToken: () => mintApiToken(userId) });
 }
 
+// Raw call (multipart uploads, binary downloads) with the same per-user token.
+export async function apiFetch(userId: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const baseUrl = process.env.API_INTERNAL_URL?.replace(/\/$/, "");
+  if (!baseUrl) throw new Error("API_INTERNAL_URL is not set");
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${await mintApiToken(userId)}`);
+  return fetch(`${baseUrl}${path}`, { ...init, headers, cache: "no-store" });
+}
+
 // Maps an API error status to the web route's existing JSON error contract.
 export function apiErrorResponse(status: number, notFound = "Not found", retryAfter?: string | null) {
   if (status === 404) return Response.json({ error: notFound }, { status: 404 });

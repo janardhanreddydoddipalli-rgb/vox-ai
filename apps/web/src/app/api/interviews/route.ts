@@ -9,6 +9,8 @@ import { eq } from "drizzle-orm";
 import { extractPdfText, parseResumeStructure } from "@/lib/resume";
 import { indexDocument } from "@/agent/doc-index";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
+import { routeTarget } from "@/lib/route-flags";
+import { createInterviewViaApi } from "@/lib/interviews";
 
 export const runtime = "nodejs";
 
@@ -28,8 +30,12 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(user.id);
 
-  const limit = await checkRate(req, "interviews", user.id);
-  if (limit) return limit;
+  const viaApi = routeTarget("INTERVIEWS") === "fastapi";
+  // services/api applies the same per-user limit itself when it serves the route.
+  if (!viaApi) {
+    const limit = await checkRate(req, "interviews", user.id);
+    if (limit) return limit;
+  }
 
   let form: FormData;
   try {
@@ -49,6 +55,13 @@ export async function POST(req: NextRequest) {
   }
   if (file && !(file instanceof File) === false && file instanceof File && file.size > 5_000_000) {
     return NextResponse.json({ error: "Resume PDF must be 5 MB or smaller" }, { status: 400 });
+  }
+
+  if (viaApi) {
+    if (file instanceof File && file.size > 0 && file.type && file.type !== "application/pdf") {
+      return NextResponse.json({ error: "Resume must be a PDF" }, { status: 400 });
+    }
+    return createInterviewViaApi(user.id, form);
   }
 
   let resumeId: string | undefined;

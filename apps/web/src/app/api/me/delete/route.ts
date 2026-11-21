@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { upsertUserByEmail, deleteAllUserData } from "@/lib/db";
+import { routeTarget } from "@/lib/route-flags";
+import { deleteMeViaApi } from "@/lib/interviews";
 
 export const runtime = "nodejs";
 
@@ -14,6 +16,7 @@ export async function DELETE() {
   const user = await upsertUserByEmail(email);
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
+  if (routeTarget("INTERVIEWS") === "fastapi") return deleteMeViaApi(user.id);
   const sessionsDeleted = await deleteAllUserData(user.id);
   return NextResponse.json({ ok: true, sessionsDeleted });
 }

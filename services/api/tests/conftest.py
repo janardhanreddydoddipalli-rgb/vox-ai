@@ -173,3 +173,22 @@ async def user_id(database_url: str) -> uuid.UUID:
         await conn.close()
     assert row is not None
     return uuid.UUID(str(row["id"]))
+
+
+@pytest.fixture
+def use_llm(app: FastAPI) -> Iterator[Callable[[Any], None]]:
+    """Swap the app's model provider for one test (None = no model configured)."""
+    original = app.state.llm
+
+    def _set(llm: Any) -> None:
+        app.state.llm = llm
+
+    yield _set
+    app.state.llm = original
+
+
+def resume_pdf(lines: list[str]) -> bytes:
+    """A real, text-extractable PDF (built with our own report writer)."""
+    from vox_api.services.report_pdf import Line, build_pdf
+
+    return build_pdf([Line(text, 11) for text in lines])

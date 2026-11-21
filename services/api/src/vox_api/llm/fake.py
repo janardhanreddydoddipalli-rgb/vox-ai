@@ -4,6 +4,7 @@ import hashlib
 import math
 import random
 from collections.abc import AsyncIterator, Sequence
+from typing import Any
 
 from vox_api.llm.base import EmbeddingTask, Generation, Message
 from vox_api.models.memory import EMBEDDING_DIMENSIONS
@@ -29,7 +30,14 @@ class FakeProvider:
         last_user = next((m.text for m in reversed(messages) if m.role == "user"), "")
         return f"echo: {last_user}"
 
-    async def generate(self, messages: Sequence[Message], *, system: str | None = None) -> Generation:
+    async def generate(
+        self,
+        messages: Sequence[Message],
+        *,
+        system: str | None = None,
+        response_schema: dict[str, Any] | None = None,
+        temperature: float | None = None,
+    ) -> Generation:
         reply = self._next_reply(messages)
         prompt = " ".join(filter(None, [system, *(m.text for m in messages)]))
         return Generation(text=reply, tokens_in=_tokens(prompt), tokens_out=_tokens(reply), model=self.model)

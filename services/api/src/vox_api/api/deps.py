@@ -12,6 +12,7 @@ from vox_api.core.db import session_scope
 from vox_api.core.errors import ProblemError
 from vox_api.core.rate_limit import RateLimiter
 from vox_api.core.security import InvalidTokenError, internal_token_matches, verify_access_token
+from vox_api.llm.base import LLMProvider
 from vox_api.models import User
 from vox_api.observability.sentry import set_user
 from vox_api.repositories import users as users_repo
@@ -30,8 +31,14 @@ async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
         yield session
 
 
+def get_llm(request: Request) -> LLMProvider | None:
+    llm: LLMProvider | None = request.app.state.llm
+    return llm
+
+
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
+LLMDep = Annotated[LLMProvider | None, Depends(get_llm)]
 
 
 async def get_current_user(

@@ -38,6 +38,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My interviews, newest first (max 50) */
+        get: operations["list_interviews_v1_interviews_get"];
+        put?: never;
+        /** Start an interview (optionally with a résumé PDF and a job description) */
+        post: operations["create_interview_v1_interviews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every answered question's score across my interviews (oldest first) */
+        get: operations["list_scores_v1_interviews_scores_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of my interviews with its answers */
+        get: operations["get_interview_v1_interviews__interview_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End the interview: generate (or reuse) the report, then distill memories */
+        post: operations["end_interview_v1_interviews__interview_id__end_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/report.pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The report as a PDF */
+        get: operations["report_as_pdf_v1_interviews__interview_id__report_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Agent tool steps (debugging) */
+        get: operations["agent_steps_v1_interviews__interview_id__steps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -49,7 +152,8 @@ export interface paths {
         get: operations["me_v1_me_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete my account and everything I own */
+        delete: operations["delete_me_v1_me_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -84,6 +188,23 @@ export interface paths {
         post?: never;
         /** Forget one memory */
         delete: operations["delete_memory_v1_memories__memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** My playground sessions, newest first */
+        get: operations["list_sessions_v1_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -128,12 +249,84 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AgentStepOut */
+        AgentStepOut: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Duration Ms */
+            duration_ms: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Input */
+            input: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output: {
+                [key: string]: unknown;
+            };
+            /** Step Index */
+            step_index: number;
+            /** Tool Name */
+            tool_name: string;
+        };
+        /** AgentSteps */
+        AgentSteps: {
+            /** Steps */
+            steps: components["schemas"]["AgentStepOut"][];
+        };
         /** AllTurns */
         AllTurns: {
             /** Sessions */
             sessions: string[];
             /** Turns */
             turns: components["schemas"]["Turn"][];
+        };
+        /** Body_create_interview_v1_interviews_post */
+        Body_create_interview_v1_interviews_post: {
+            /**
+             * Job Description
+             * @default
+             */
+            job_description: string;
+            /**
+             * Language
+             * @default en
+             * @enum {string}
+             */
+            language: "en" | "hi" | "ta" | "te";
+            /**
+             * Level
+             * @enum {string}
+             */
+            level: "junior" | "mid" | "senior";
+            /** Resume */
+            resume?: string | null;
+            /** Role */
+            role: string;
+        };
+        /** DeletedAccount */
+        DeletedAccount: {
+            /** Sessions Deleted */
+            sessions_deleted: number;
+        };
+        /** EndResult */
+        EndResult: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Report */
+            report: {
+                [key: string]: unknown;
+            };
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -148,6 +341,75 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** InterviewCreated */
+        InterviewCreated: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+        };
+        /** InterviewDetail */
+        InterviewDetail: {
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Question Index */
+            current_question_index: number;
+            /** Has Resume */
+            has_resume: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Language */
+            language: string;
+            /** Level */
+            level: string;
+            /** Qa */
+            qa: components["schemas"]["QaItem"][];
+            /** Report */
+            report: {
+                [key: string]: unknown;
+            } | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
+        };
+        /** InterviewList */
+        InterviewList: {
+            /** Interviews */
+            interviews: components["schemas"]["InterviewSummary"][];
+        };
+        /** InterviewSummary */
+        InterviewSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Language */
+            language: string;
+            /** Level */
+            level: string;
+            /** Overall */
+            overall: number | null;
+            /** Role */
+            role: string;
+            /** Status */
+            status: string;
         };
         /** Me */
         Me: {
@@ -190,6 +452,31 @@ export interface components {
             /** Memories */
             memories: components["schemas"]["Memory"][];
         };
+        /** QaItem */
+        QaItem: {
+            /** Answer */
+            answer: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Evaluation */
+            evaluation: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Order */
+            order: number;
+            /** Question */
+            question: string;
+            /** Question Id */
+            question_id: string | null;
+        };
         /** Readiness */
         Readiness: {
             /**
@@ -204,6 +491,45 @@ export interface components {
              * @constant
              */
             status: "ready";
+        };
+        /** ScoreList */
+        ScoreList: {
+            /** Scores */
+            scores: components["schemas"]["ScorePoint"][];
+        };
+        /** ScorePoint */
+        ScorePoint: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Interview Id
+             * Format: uuid
+             */
+            interview_id: string;
+            /** Order */
+            order: number;
+            /** Score */
+            score: number | null;
+        };
+        /** SessionList */
+        SessionList: {
+            /** Sessions */
+            sessions: components["schemas"]["SessionSummary"][];
+        };
+        /** SessionSummary */
+        SessionSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Mode */
+            mode: string;
         };
         /** SessionTurns */
         SessionTurns: {
@@ -341,6 +667,252 @@ export interface operations {
             };
         };
     };
+    list_interviews_v1_interviews_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewList"];
+                };
+            };
+        };
+    };
+    create_interview_v1_interviews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_interview_v1_interviews_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewCreated"];
+                };
+            };
+            /** @description Unreadable or oversized résumé */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_scores_v1_interviews_scores_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoreList"];
+                };
+            };
+        };
+    };
+    get_interview_v1_interviews__interview_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewDetail"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_interview_v1_interviews__interview_id__end_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EndResult"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Report generation failed */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    report_as_pdf_v1_interviews__interview_id__report_pdf_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": unknown;
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    agent_steps_v1_interviews__interview_id__steps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentSteps"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     me_v1_me_get: {
         parameters: {
             query?: never;
@@ -365,6 +937,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    delete_me_v1_me_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedAccount"];
+                };
             };
         };
     };
@@ -428,6 +1020,26 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    list_sessions_v1_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
             };
         };
     };
