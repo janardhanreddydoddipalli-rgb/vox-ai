@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Per-identity rate limiting. Dev/default: in-memory sliding window.
-// Prod: Upstash Redis Ratelimit, wired via setUpstashRateLimiter() —
-// same interface either way, so routes never change.
+// Per-identity rate limiting. Prod: Upstash Redis Ratelimit when its env vars
+// are set; dev/test: in-memory sliding window. Same interface either way, so
+// routes never change.
 
 export interface RateLimiter {
   check(key: string, limit: number, windowMs: number): Promise<{ ok: boolean; retryAfterSec: number }>;
@@ -35,31 +35,61 @@ class SlidingWindowLimiter implements RateLimiter {
   }
 }
 
-export let rateLimiter: RateLimiter = new SlidingWindowLimiter();
-
-export function setRateLimiter(l: RateLimiter) {
-  rateLimiter = l;
-}
-
-// Upstash-backed limiter for prod. Called at server startup (instrumentation)
-// when Upstash env vars are present.
-export async function setUpstashRateLimiter(): Promise<void> {
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return;
+// Upstash-backed limiter for production: shared across serverless instances.
+// One Ratelimit per (limit, window) policy, each with its own key prefix, so
+// routes with different limits never share counters. Fails open on Upstash
+// errors: an outage of the limiter must not take the product down.
+async function createUpstashLimiter(url: string, token: string): Promise<RateLimiter> {
   const [{ Ratelimit }, { Redis }] = await Promise.all([import("@upstash/ratelimit"), import("@upstash/redis")]);
-  const ratelimit = new Ratelimit({
-    redis: new Redis({ url, token }),
-    limiter: Ratelimit.slidingWindow(30, "60 s"),
-    prefix: "vox:rl",
-  });
-  rateLimiter = {
-    async check(key) {
-      const r = await ratelimit.limit(key);
-      const retryAfterSec = r.success ? 0 : Math.max(1, Math.ceil((r.reset - Date.now()) / 1000));
-      return { ok: r.success, retryAfterSec };
+  const redis = new Redis({ url, token });
+  const byPolicy = new Map<string, InstanceType<typeof Ratelimit>>();
+  return {
+    async check(key, limit, windowMs) {
+      const policy = `${limit}:${windowMs}`;
+      let rl = byPolicy.get(policy);
+      if (!rl) {
+        rl = new Ratelimit({ redis, limiter: Ratelimit.slidingWindow(limit, `${windowMs} ms`), prefix: `vox:rl:${policy}` });
+        byPolicy.set(policy, rl);
+      }
+      try {
+        const r = await rl.limit(key);
+        const retryAfterSec = r.success ? 0 : Math.max(1, Math.ceil((r.reset - Date.now()) / 1000));
+        return { ok: r.success, retryAfterSec };
+      } catch (err) {
+        console.error("[rate-limit] Upstash check failed; allowing request", err);
+        return { ok: true, retryAfterSec: 0 };
+      }
     },
   };
+}
+
+// Backend is chosen once per process, on first use: Upstash when its env vars
+// are set, otherwise the in-memory limiter (dev/test). Lazy rather than set
+// from instrumentation, because Next.js does not guarantee instrumentation and
+// route handlers share module state.
+let override: RateLimiter | null = null;
+let active: Promise<RateLimiter> | null = null;
+
+function activeLimiter(): Promise<RateLimiter> {
+  if (override) return Promise.resolve(override);
+  if (!active) {
+    const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
+    if (url && token) {
+      active = createUpstashLimiter(url, token);
+    } else {
+      if (process.env.NODE_ENV === "production") {
+        console.warn("[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN not set; using per-instance in-memory limiter");
+      }
+      active = Promise.resolve(new SlidingWindowLimiter());
+    }
+  }
+  return active;
+}
+
+// Test hook: force a specific limiter (null restores env-based selection).
+export function setRateLimiter(l: RateLimiter | null) {
+  override = l;
 }
 
 const CHAT_LIMIT = 30; // requests
@@ -86,7 +116,7 @@ export async function checkRate(
   limit = CHAT_LIMIT,
 ): Promise<NextResponse | null> {
   const key = await rateLimitKey(req, name, userId);
-  const { ok, retryAfterSec } = await rateLimiter.check(key, limit, WINDOW_MS);
+  const { ok, retryAfterSec } = await (await activeLimiter()).check(key, limit, WINDOW_MS);
   if (ok) return null;
   return NextResponse.json(
     { error: "Too many requests. Please slow down." },
