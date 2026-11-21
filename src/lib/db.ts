@@ -6,6 +6,12 @@ const dataDir = path.join(process.cwd(), "data");
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
 const dbPath = process.env.VOICEBOT_DB_PATH || path.join(dataDir, "voicebot.db");
+
+// Guardrail: under test, never open the real database by accident.
+if (process.env.NODE_ENV === "test" && !process.env.VOICEBOT_DB_PATH) {
+  throw new Error("Refusing to open the default DB under NODE_ENV=test. Set VOICEBOT_DB_PATH.");
+}
+
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 

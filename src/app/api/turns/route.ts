@@ -23,6 +23,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, turns: getTurns(sessionId) });
 }
 
-export async function GET() {
+// History is not public until auth exists (Phase 2): require the admin token.
+export async function GET(req: NextRequest) {
+  const token = process.env.ADMIN_TOKEN;
+  const provided = req.headers.get("x-admin-token");
+  if (!token || !provided || provided !== token) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   return NextResponse.json({ sessions: listSessions() });
 }

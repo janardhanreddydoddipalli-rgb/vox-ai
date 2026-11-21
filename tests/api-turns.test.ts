@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { POST as turnsPost, GET as turnsGet } from "@/app/api/turns/route";
-import { resetDb } from "./db-mock";
+import { resetDb, TEST_ADMIN_TOKEN } from "./setup";
 
 function req(body: any) {
   return new Request("http://localhost:3000/api/turns", {
@@ -68,8 +68,25 @@ describe("POST /api/turns", () => {
 });
 
 describe("GET /api/turns", () => {
-  it("lists sessions", async () => {
-    const res = await turnsGet();
+  it("rejects anonymous reads with 401", async () => {
+    const r = new Request("http://localhost:3000/api/turns") as any;
+    const res = await turnsGet(r);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a wrong token with 401", async () => {
+    const r = new Request("http://localhost:3000/api/turns", {
+      headers: { "x-admin-token": "nope" },
+    }) as any;
+    const res = await turnsGet(r);
+    expect(res.status).toBe(401);
+  });
+
+  it("lists sessions with the correct admin token", async () => {
+    const r = new Request("http://localhost:3000/api/turns", {
+      headers: { "x-admin-token": TEST_ADMIN_TOKEN },
+    }) as any;
+    const res = await turnsGet(r);
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(Array.isArray(data.sessions)).toBe(true);
