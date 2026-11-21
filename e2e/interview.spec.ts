@@ -2,7 +2,8 @@ import { test, expect, type Page } from "@playwright/test";
 
 // Full E2E: test sign-in → onboarding → text-mode interview of 3 questions →
 // scored report. Uses the real Gemini key from the environment (the agent
-// loop is the product under test).
+// loop is the product under test), so it is tagged @real-model and runs only
+// in the manual evals workflow (npm run test:e2e:real-model), never in CI.
 const ANSWERS = [
   "Between typing the URL and seeing the page, the browser resolves DNS, opens a TCP connection with TLS, sends the HTTP request, and the server responds with HTML. The browser parses the HTML into the DOM, fetches CSS and JS, builds the render tree, runs layout and paint, then composites the final frame.",
   "Connection pooling keeps a set of database connections open and reuses them for each request. Opening a connection costs a TCP and auth handshake per query, which is brutal in serverless where every invocation might be cold. A pool amortises that cost, and you size it to the database's max connections divided by instances.",
@@ -14,7 +15,7 @@ async function sendAnswer(page: Page, text: string) {
   await page.getByRole("button", { name: "Send" }).click();
 }
 
-test("sign up, run a 3-question text interview, and read the report", async ({ page }) => {
+test("sign up, run a 3-question text interview, and read the report @real-model", async ({ page }) => {
   test.setTimeout(600_000);
 
   // 1. Sign up with the test credentials provider.

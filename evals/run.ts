@@ -152,7 +152,9 @@ async function runCase(testCase: Case, userId: string): Promise<CaseResult> {
 async function main() {
   // Test DB: migrate, wipe, seed the question bank.
   const url = process.env.TEST_DATABASE_URL!;
-  const admin = postgres(url, { max: 1 });
+  const admin = postgres(url, { max: 1, onnotice: () => {} });
+  // No Drizzle migration creates pgvector; a fresh CI database needs it first.
+  await admin`CREATE EXTENSION IF NOT EXISTS vector`;
   await migrate(drizzle(admin), { migrationsFolder: "./drizzle" });
   await admin.end();
   await db.execute("TRUNCATE agent_steps, interviews, turns, sessions, users, questions CASCADE" as never);

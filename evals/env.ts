@@ -1,12 +1,17 @@
 // Eval environment: must run before any app import (mirrors tests/setup.ts).
 // Loads .env.local, forces the dedicated test database, and requires a real
 // GEMINI_API_KEY — the eval exercises the live model, not a mock.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
-// Minimal .env.local loader (KEY=VALUE lines) so `npm run eval` works without dotenv.
-for (const line of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split("\n")) {
-  const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-  if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim();
+// Minimal .env.local loader (KEY=VALUE lines) so `npm run eval` works without
+// dotenv locally. Optional: in CI the values come from process.env (secrets),
+// and anything already in process.env wins over the file.
+const envFile = new URL("../.env.local", import.meta.url);
+if (existsSync(envFile)) {
+  for (const line of readFileSync(envFile, "utf8").split("\n")) {
+    const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].trim();
+  }
 }
 
 const TEST_URL = process.env.TEST_DATABASE_URL || "postgres://ubuntu:ubuntu@localhost:5432/voicebot_test";
