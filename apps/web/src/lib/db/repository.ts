@@ -344,7 +344,10 @@ export async function searchDocChunks(userId: string, embedding: number[], limit
 }
 
 // --- deletion (privacy) --------------------------------------------------
-// Deletes a user and, via ON DELETE CASCADE, their sessions and turns.
+// Deletes a user and everything they own. Turns are removed explicitly; the
+// users row then cascades (ON DELETE CASCADE) to sessions, resumes,
+// interviews (→ interview_qa, agent_steps), user_memories, doc_chunks and
+// token_usage. Covered by tests/delete-user-data.test.ts across every table.
 export async function deleteAllUserData(userId: string) {
   const owned = await sessionIdsForUser(userId);
   if (owned.length > 0) {

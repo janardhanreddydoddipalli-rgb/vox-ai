@@ -4,8 +4,8 @@ import { upsertUserByEmail, deleteAllUserData } from "@/lib/db";
 
 export const runtime = "nodejs";
 
-// Privacy: wipe everything belonging to the signed-in user — turns, sessions
-// and the users row. Sessions cascade via FK; turns are removed explicitly.
+// Privacy: wipe everything belonging to the signed-in user, in every table
+// (see deleteAllUserData and tests/delete-user-data.test.ts).
 export async function DELETE() {
   const session = await auth();
   const email = session?.user?.email;
