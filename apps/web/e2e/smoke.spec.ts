@@ -14,6 +14,12 @@ test("API rejects signed-out callers", async ({ request }) => {
   expect(res.status()).toBe(401);
 });
 
+test("signed-out dashboard visit redirects to sign-in", async ({ page }) => {
+  await page.goto("/dashboard");
+  await page.waitForURL("**/signin?callbackUrl=%2Fdashboard");
+  await expect(page.getByRole("heading", { name: "Sign in to Vox" })).toBeVisible();
+});
+
 test("sign in, reach the dashboard and open interview setup", async ({ page }) => {
   await page.goto("/signin");
   await page.getByLabel("Email").fill(`smoke-${Date.now()}@example.com`);

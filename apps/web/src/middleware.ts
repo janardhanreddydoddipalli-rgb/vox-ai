@@ -14,7 +14,14 @@ export default async function middleware(req: NextRequest) {
 
   const session = await auth();
   if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // API callers get JSON; people visiting a page get sent to sign-in and
+    // brought back to where they were going.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const signin = new URL("/signin", req.nextUrl.origin);
+    signin.searchParams.set("callbackUrl", `${pathname}${req.nextUrl.search}`);
+    return NextResponse.redirect(signin);
   }
   return NextResponse.next();
 }
