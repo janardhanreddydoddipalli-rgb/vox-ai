@@ -19,6 +19,9 @@ const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 // itself stays valid 30 minutes (a connected session keeps streaming).
 const SESSION_WINDOW_MINUTES = 2;
 const TOKEN_LIFETIME_MINUTES = 30;
+// Own bucket: each mint starts one live session (plus reconnects), so a
+// handful per minute is plenty; each token is a paid session.
+const VOICE_SESSION_LIMIT = 10;
 
 function isoPlus(minutes: number) {
   return new Date(Date.now() + minutes * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
@@ -29,13 +32,15 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limit = await checkRate(req, "chat", session.user.email);
-  if (limit) return limit;
-  setSentryUser(session.user.id ?? undefined);
-
   const user = await upsertUserByEmail(session.user.email);
-  const budget = user ? await checkDailyBudget(user.id) : null;
-  if (budget && !budget.allowed) {
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(user.id);
+
+  const limit = await checkRate(req, "voice-session", user.id, VOICE_SESSION_LIMIT);
+  if (limit) return limit;
+
+  const budget = await checkDailyBudget(user.id);
+  if (!budget.allowed) {
     return NextResponse.json({ error: "budget_exceeded", message: budget.message }, { status: 429 });
   }
 
