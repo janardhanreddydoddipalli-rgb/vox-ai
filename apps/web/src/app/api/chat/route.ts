@@ -14,6 +14,8 @@ import { startTurnTrace } from "@/lib/tracing";
 import { checkDailyBudget, recordTokenUsage } from "@/lib/cost-guard";
 import type { LoopResult } from "@/agent/loop";
 import "@/agent/tools/all";
+import { routeTarget } from "@/lib/route-flags";
+import { apiFetch, apiErrorResponse } from "@/lib/api-server";
 
 export const runtime = "nodejs";
 
@@ -50,14 +52,36 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   const userId = session?.user?.email ? await userIdForEmail(session.user.email) : null;
   setSentryUser(userId);
-  const limited = await checkRate(req, "chat", userId);
-  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const parsed = chatSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: firstIssueMessage(parsed.error) }, { status: 400 });
   }
+
+  // Plain (non-interview) chat is served by services/api when ROUTE_CHAT=fastapi:
+  // its SSE stream is passed through unchanged; the API rate-limits and meters it.
+  const interviewMode = Boolean(parsed.data.interview || parsed.data.interviewId);
+  if (!interviewMode && routeTarget("CHAT") === "fastapi") {
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const upstream = await apiFetch(userId, "/v1/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_text: parsed.data.userText, history: parsed.data.history }),
+      signal: req.signal,
+    });
+    if (!upstream.ok || !upstream.body) {
+      if (upstream.status === 422) return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+      return apiErrorResponse(upstream.status, "Not found", upstream.headers.get("retry-after"));
+    }
+    return new NextResponse(upstream.body, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" },
+    });
+  }
+
+  const limited = await checkRate(req, "chat", userId);
+  if (limited) return limited;
   const userText = parsed.data.userText;
   const history: HistoryTurn[] = parsed.data.history;
 

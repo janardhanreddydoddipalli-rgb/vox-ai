@@ -74,6 +74,7 @@ jobs:
       DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       AUTH_SECRET: ci-only-not-a-secret
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      E2E_REAL_MODEL: "1" # playwright.config.ts passes the key to Next only with this
     steps:
       - uses: actions/checkout@v4
 

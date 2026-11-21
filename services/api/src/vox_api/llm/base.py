@@ -1,6 +1,6 @@
 """The provider boundary every model call goes through (Gemini in production, Fake in tests)."""
 
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, runtime_checkable
 
@@ -26,6 +26,15 @@ class Generation:
     model: str
 
 
+@dataclass(frozen=True)
+class StreamChunk:
+    """A piece of a streamed reply; the final chunk usually carries the token usage."""
+
+    text: str
+    tokens_in: int = 0
+    tokens_out: int = 0
+
+
 @runtime_checkable
 class LLMProvider(Protocol):
     """Every paid path reports token usage (tokens_in/out) so the cost guard can record it."""
@@ -41,8 +50,15 @@ class LLMProvider(Protocol):
         """One complete reply. With response_schema the reply text is JSON matching it."""
         ...
 
-    def stream(self, messages: Sequence[Message], *, system: str | None = None) -> AsyncIterator[str]:
-        """The reply as text chunks, in order."""
+    def stream(
+        self,
+        messages: Sequence[Message],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> AsyncGenerator[StreamChunk]:
+        """The reply as chunks, in order; usage arrives on the last ones."""
         ...
 
     async def embed(self, texts: Sequence[str], *, task: EmbeddingTask) -> list[list[float]]:

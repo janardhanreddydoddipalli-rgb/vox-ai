@@ -153,11 +153,13 @@ export async function loadReportView(userId: string, id: string): Promise<Report
 
 export async function loadDashboard(userId: string) {
   const turnsViaApi = routeTarget("TURNS") === "fastapi";
-  const api = apiFor(userId);
+  // Only touch the API when a section is served by it: with every flag on
+  // "next", API_INTERNAL_URL may legitimately be unset.
+  const api = () => apiFor(userId);
 
   const [sessions, turns] = turnsViaApi
     ? await (async () => {
-        const [s, t] = await Promise.all([api.GET("/v1/sessions"), api.GET("/v1/turns")]);
+        const [s, t] = await Promise.all([api().GET("/v1/sessions"), api().GET("/v1/turns")]);
         if (!s.data || !t.data) throw new Error("sessions/turns API failed");
         return [
           s.data.sessions.map((x) => ({ id: x.id, mode: x.mode, createdAt: new Date(x.created_at).toISOString() })),
@@ -187,7 +189,7 @@ export async function loadDashboard(userId: string) {
 
   const [interviews, qaScores] = viaApi()
     ? await (async () => {
-        const [i, s] = await Promise.all([api.GET("/v1/interviews"), api.GET("/v1/interviews/scores")]);
+        const [i, s] = await Promise.all([api().GET("/v1/interviews"), api().GET("/v1/interviews/scores")]);
         if (!i.data || !s.data) throw new Error("interviews API failed");
         return [
           i.data.interviews.map((x) => ({

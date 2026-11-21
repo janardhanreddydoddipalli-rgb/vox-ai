@@ -1,5 +1,10 @@
 import { defineConfig } from "@playwright/test";
 
+// E2E never calls a real (paid) model unless explicitly asked: Next would
+// otherwise load GEMINI_API_KEY from .env.local. Only the manual real-model
+// workflow sets E2E_REAL_MODEL=1.
+const realModel = process.env.E2E_REAL_MODEL === "1";
+
 export default defineConfig({
   testDir: "./e2e",
   timeout: 300_000,
@@ -16,6 +21,7 @@ export default defineConfig({
     env: {
       E2E_TEST_AUTH: "1",
       ...process.env,
+      GEMINI_API_KEY: realModel ? (process.env.GEMINI_API_KEY ?? "") : "",
     },
   },
 });

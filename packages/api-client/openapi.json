@@ -142,6 +142,29 @@
         "title": "Body_create_interview_v1_interviews_post",
         "type": "object"
       },
+      "ChatIn": {
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryTurn"
+            },
+            "maxItems": 20,
+            "title": "History",
+            "type": "array"
+          },
+          "user_text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "User Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_text"
+        ],
+        "title": "ChatIn",
+        "type": "object"
+      },
       "DeletedAccount": {
         "properties": {
           "sessions_deleted": {
@@ -198,6 +221,29 @@
           }
         },
         "title": "Health",
+        "type": "object"
+      },
+      "HistoryTurn": {
+        "properties": {
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "text"
+        ],
+        "title": "HistoryTurn",
         "type": "object"
       },
       "InterviewCreated": {
@@ -913,6 +959,51 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/v1/chat": {
+      "post": {
+        "operationId": "chat_stream_v1_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Stream a spoken reply (SSE: meta, token, sentence, done | error)",
+        "tags": [
+          "chat"
+        ]
+      }
+    },
     "/v1/health": {
       "get": {
         "operationId": "health_v1_health_get",
