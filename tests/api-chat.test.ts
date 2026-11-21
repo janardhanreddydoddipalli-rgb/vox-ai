@@ -1,9 +1,18 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, beforeAll, vi } from "vitest";
 import { POST as chatPost } from "@/app/api/chat/route";
 import { GET as healthGet } from "@/app/api/health/route";
 import { mockGeminiOk, mockGeminiFailure } from "./gemini-mock";
+import { resetDb } from "./setup";
+import { testAuth } from "./auth-mock";
 
-function req(body: any, origin?: string) {
+vi.mock("@/lib/auth", async () => {
+  const { makeAuthMock } = await import("./auth-mock");
+  return makeAuthMock();
+});
+
+const authState = testAuth;
+
+function req(body: unknown, origin?: string) {
   return new Request("http://localhost:3000/api/chat", {
     method: "POST",
     headers: {
@@ -14,8 +23,11 @@ function req(body: any, origin?: string) {
   }) as any;
 }
 
-beforeEach(() => {
+beforeAll(async () => {});
+beforeEach(async () => {
   mockGeminiOk("Test reply");
+  await resetDb();
+  authState.asA();
 });
 
 describe("POST /api/chat", () => {
@@ -25,16 +37,6 @@ describe("POST /api/chat", () => {
     const data = await res.json();
     expect(data.reply).toBe("Test reply");
     expect(data.engine).toBe("gemini");
-  });
-
-  it("sends history to Gemini", async () => {
-    await chatPost(
-      req({
-        userText: "follow-up",
-        history: [{ role: "user", text: "first" }, { role: "assistant", text: "answer" }],
-      }),
-    );
-    // verified via the mock's recorded body in gemini-mock
   });
 
   it("rejects empty message with 400", async () => {
@@ -84,14 +86,21 @@ describe("POST /api/chat", () => {
     expect(res.status).toBe(403);
   });
 
-  it("returns 405 for GET", async () => {
+  it("allows anonymous chat (rate limited by IP)", async () => {
+    authState.signOut();
+    const res = await chatPost(req({ userText: "hi" }));
+    expect(res.status).toBe(200);
+    authState.asA();
+  });
+
+  it("is POST-only", async () => {
     const mod = await import("@/app/api/chat/route");
     expect((mod as any).GET).toBeUndefined();
   });
 });
 
 describe("GET /api/health", () => {
-  it("reports engine, model and db status", async () => {
+  it("reports engine, model and postgres status", async () => {
     const res = await healthGet();
     expect(res.status).toBe(200);
     const data = await res.json();

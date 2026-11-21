@@ -1,20 +1,30 @@
-// Point the db module at a throwaway temp file per test run so tests can
-// never touch the real data/voicebot.db. Loaded via vitest setupFiles,
-// before any module imports @/lib/db.
-import fs from "fs";
-import os from "os";
-import path from "path";
+// Test setup: point Drizzle at the dedicated test database. Tests NEVER
+// touch the dev/prod database: src/lib/db/client.ts refuses to boot when
+// NODE_ENV=test unless DATABASE_URL equals TEST_DATABASE_URL.
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import postgres from "postgres";
 
-// Vitest sets NODE_ENV=test itself; db.ts refuses the default path in that mode.
-process.env.ADMIN_TOKEN = "test-admin-token";
-process.env.GEMINI_API_KEY = "test-key";
+const TEST_URL = process.env.TEST_DATABASE_URL || "postgres://ubuntu:ubuntu@localhost:5432/voicebot_test";
+process.env.TEST_DATABASE_URL = TEST_URL;
+process.env.DATABASE_URL = TEST_URL; // client.ts reads this; same test db
+process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret-not-a-real-credential";
+process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "test-key";
 process.env.GEMINI_MODEL = "gemini-3.5-flash";
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "voicebot-test-"));
-process.env.VOICEBOT_DB_PATH = path.join(tmp, "test.db");
+// Guard: the client module throws unless NODE_ENV=test; vitest sets it.
+if (process.env.NODE_ENV !== "test") {
+  throw new Error("Tests must run with NODE_ENV=test");
+}
 
-export const TEST_ADMIN_TOKEN = process.env.ADMIN_TOKEN;
+// Apply migrations once per test run.
+const migrator = postgres(TEST_URL, { max: 1 });
+await migrate(drizzle(migrator), { migrationsFolder: "./drizzle" });
+await migrator.end();
 
-export function resetDb() {
-  // each test file gets a fresh tmp db via env above
+// Per-test cleanup: wipe all rows between tests.
+export async function resetDb() {
+  const sql = postgres(TEST_URL, { max: 1 });
+  await sql`TRUNCATE turns, sessions, users CASCADE`;
+  await sql.end();
 }

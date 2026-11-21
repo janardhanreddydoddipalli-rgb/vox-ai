@@ -180,6 +180,9 @@ export default function Home() {
           Vox
         </div>
         <div className="meta">
+          <a className="pill" href="/dashboard">
+            History
+          </a>
           {offline && <span className="pill pill-offline">Offline mode</span>}
           {mode && <span className="pill">{mode === "gemini" ? "Gemini · Flash" : "Browser speech"}</span>}
           {active && <span className="pill">{mm}:{ss}</span>}

@@ -2,8 +2,15 @@ import { NextRequest, NextResponse } from "next/server";
 import { GEMINI_MODEL, CHAT_CONTEXT_TURNS } from "@/lib/config";
 import { chatSchema, firstIssueMessage } from "@/lib/schemas";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
+import { auth } from "@/lib/auth";
+import { upsertUserByEmail } from "@/lib/db";
 
 export const runtime = "nodejs";
+
+async function userIdForEmail(email: string): Promise<string | null> {
+  const user = await upsertUserByEmail(email);
+  return user?.id ?? null;
+}
 
 const MODEL = GEMINI_MODEL;
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
@@ -20,7 +27,9 @@ type HistoryTurn = { role: "user" | "assistant"; text: string };
 // Engine/model info lives at GET /api/health.
 export async function POST(req: NextRequest) {
   if (!originAllowed(req)) return blockedOrigin();
-  const limited = checkRate(req, "chat");
+  const session = await auth();
+  const userId = session?.user?.email ? await userIdForEmail(session.user.email) : null;
+  const limited = await checkRate(req, "chat", userId);
   if (limited) return limited;
 
   const body = await req.json().catch(() => null);

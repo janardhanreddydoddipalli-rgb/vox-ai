@@ -6,6 +6,8 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     setupFiles: ["tests/setup.ts"],
+    fileParallelism: false, // tests share one Postgres test database
+    server: { deps: { inline: ["next-auth", "@auth/core"] } },
   },
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
