@@ -24,7 +24,11 @@ export async function upsertUserByEmail(email: string, name?: string | null, ima
   const [row] = await db
     .insert(users)
     .values({ email, name: name ?? null, image: image ?? null })
-    .onConflictDoUpdate({ target: users.email, set: { name: name ?? null, image: image ?? null } })
+    // A missing name/image keeps the stored one (most callers pass only the email).
+    .onConflictDoUpdate({
+      target: users.email,
+      set: { name: sql`coalesce(excluded.name, ${users.name})`, image: sql`coalesce(excluded.image, ${users.image})` },
+    })
     .returning();
   return row;
 }

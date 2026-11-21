@@ -9,8 +9,6 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Terms page (Phase 13, launch).** The footer link to `/terms` was removed because the page didn't exist (decision 2026-11-22). Add a Terms of Service page and restore the link at launch; `tests/internal-links.test.ts` will fail if the link returns before the page does.
 
-- **Web: `upsertUserByEmail` blanks names.** On conflict it sets `name`/`image` to the passed values, and most callers pass only the email, so the stored name and image become NULL on every such request. Fix: keep stored values when none are passed (as `services/api` does), or retire it in M3 when user writes move to the API.
-
 ## M3
 
 - Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).
