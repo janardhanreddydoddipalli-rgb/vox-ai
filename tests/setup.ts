@@ -17,8 +17,11 @@ if (process.env.NODE_ENV !== "test") {
   throw new Error("Tests must run with NODE_ENV=test");
 }
 
-// Apply migrations once per test run.
+// Apply migrations once per test run. No Drizzle migration creates the
+// pgvector extension (0005 assumes it exists), so a fresh test database needs
+// it first. The Alembic baseline (M2) will own this properly.
 const migrator = postgres(TEST_URL, { max: 1 });
+await migrator`CREATE EXTENSION IF NOT EXISTS vector`;
 await migrate(drizzle(migrator), { migrationsFolder: "./drizzle" });
 await migrator.end();
 
