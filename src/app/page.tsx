@@ -238,7 +238,7 @@ export default function Home() {
         {turns.length === 0 && !partial && (
           <p className="empty">
             Nothing yet. Tap <strong>Start talking</strong>, allow the microphone, and speak — your
-            transcript appears here and is saved when you stop.
+            transcript appears here and is saved after each reply.
           </p>
         )}
         {turns.map((t, i) => (
