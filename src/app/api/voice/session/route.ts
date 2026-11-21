@@ -11,6 +11,12 @@ import { GEMINI_LIVE_MODEL } from "@/lib/config";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { functionDeclarations } from "@/agent/loop";
+import { isLanguageCode, languageDirective } from "@/lib/languages";
+import { z } from "zod";
+
+const bodySchema = z.object({
+  language: z.string().refine(isLanguageCode).optional(),
+});
 
 export const runtime = "nodejs";
 
@@ -49,21 +55,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Voice service is not configured" }, { status: 503 });
   }
 
-  let body: { language?: string } = {};
-  try {
-    body = await req.json();
-  } catch {
-    // language optional
-  }
-  const language = typeof body.language === "string" ? body.language.slice(0, 10) : "";
-
-  const languageDirective = language
-    ? `\n\nLANGUAGE: Conduct the entire interview in ${language}. Ask questions, follow-ups and the final spoken report in ${language}, regardless of the language the candidate answers in.`
-    : "";
+  // Language is optional, but when present it must be a supported code: it is
+  // interpolated into the system prompt, so free text is never accepted.
+  const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "Unsupported language" }, { status: 400 });
+  const { language } = parsed.data;
 
   const systemInstruction =
     INTERVIEWER_SYSTEM_PROMPT +
-    languageDirective +
+    (language ? languageDirective(language) : "") +
     "\n\nYou are on a live voice call: keep replies to one or two spoken sentences, never use lists, markdown or emoji, and spell out numbers and code naturally for speech.";
 
   const res = await fetch(`${BASE_URL}/auth_tokens`, {
