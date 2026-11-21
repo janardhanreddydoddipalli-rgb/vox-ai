@@ -12,6 +12,8 @@ import {
 import { turnsSchema, firstIssueMessage } from "@/lib/schemas";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { setSentryUser } from "@/lib/observability";
+import { routeTarget } from "@/lib/route-flags";
+import { readTurnsViaApi, saveTurnsViaApi } from "@/lib/turns";
 
 export const runtime = "nodejs";
 
@@ -24,14 +26,19 @@ export async function POST(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(userId);
 
-  const limited = await checkRate(req, "turns", userId);
-  if (limited) return limited;
+  const viaApi = routeTarget("TURNS") === "fastapi";
+  // services/api applies the same per-user limit itself when it serves the route.
+  if (!viaApi) {
+    const limited = await checkRate(req, "turns", userId);
+    if (limited) return limited;
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = turnsSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: firstIssueMessage(parsed.error) }, { status: 400 });
   }
+  if (viaApi) return saveTurnsViaApi(userId, parsed.data);
   const { sessionId, mode, turns } = parsed.data;
   await ensureSession(userId, sessionId, mode as Mode);
   // sessionId is client-chosen: if it already belongs to someone else, refuse
@@ -62,9 +69,10 @@ export async function GET(req: NextRequest) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(userId);
 
+  const wanted = new URL(req.url).searchParams.get("sessionId");
+  if (routeTarget("TURNS") === "fastapi") return readTurnsViaApi(userId, wanted);
+
   const owned = await sessionIdsForUser(userId);
-  const url = new URL(req.url);
-  const wanted = url.searchParams.get("sessionId");
   if (wanted) {
     if (!(await sessionOwnedBy(wanted, userId))) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });

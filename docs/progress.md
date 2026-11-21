@@ -4,8 +4,8 @@ One PR per route. Each PR: API tests first, the FastAPI route, a `ROUTE_<NAME>=n
 
 | # | Route | PR | Flag | API tests | Web tests | E2E (next / fastapi) | Status |
 |---|---|---|---|---|---|---|---|
-| 1 | memories (`GET /v1/memories`, `DELETE /v1/memories/{id}`) | (open) | `ROUTE_MEMORIES` | 64 | 119 | 5 / 5 | in review |
-| 2 | turns | | `ROUTE_TURNS` | | | | |
+| 1 | memories (`GET /v1/memories`, `DELETE /v1/memories/{id}`) | #13 | `ROUTE_MEMORIES` | 64 | 119 | 5 / 5 | merged |
+| 2 | turns (`GET /v1/turns`, `GET`/`POST /v1/sessions/{id}/turns`) | (open) | `ROUTE_TURNS` | 81 | 126 | 6 / 6 | in review. Also fixed: a user could write into another user's session and read it back |
 | 3 | interviews, report, PDF | | `ROUTE_INTERVIEWS` | | | | |
 | 4 | chat SSE | | `ROUTE_CHAT` | | | | |
 | 5 | agent loop + tools | | `ROUTE_AGENT` | | | | |

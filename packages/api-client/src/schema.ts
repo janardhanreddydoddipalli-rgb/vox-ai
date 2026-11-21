@@ -89,10 +89,52 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{session_id}/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of my sessions */
+        get: operations["session_turns_v1_sessions__session_id__turns_get"];
+        put?: never;
+        /** Append turns to my session (created on first save) */
+        post: operations["save_turns_v1_sessions__session_id__turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All my sessions and their turns */
+        get: operations["list_turns_v1_turns_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AllTurns */
+        AllTurns: {
+            /** Sessions */
+            sessions: string[];
+            /** Turns */
+            turns: components["schemas"]["Turn"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -162,6 +204,73 @@ export interface components {
              * @constant
              */
             status: "ready";
+        };
+        /** SessionTurns */
+        SessionTurns: {
+            /** Session Id */
+            session_id: string;
+            /** Turns */
+            turns: components["schemas"]["Turn"][];
+        };
+        /** Turn */
+        Turn: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** First Token Ms */
+            first_token_ms: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Latency Ms */
+            latency_ms: number | null;
+            /** Role */
+            role: string;
+            /** Session Id */
+            session_id: string;
+            /** Stt Ms */
+            stt_ms: number | null;
+            /** Text */
+            text: string;
+            /** Total Llm Ms */
+            total_llm_ms: number | null;
+            /** Tts Start Ms */
+            tts_start_ms: number | null;
+        };
+        /** TurnIn */
+        TurnIn: {
+            /** First Token Ms */
+            first_token_ms?: number | null;
+            /** Latency Ms */
+            latency_ms?: number | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Stt Ms */
+            stt_ms?: number | null;
+            /** Text */
+            text: string;
+            /** Total Llm Ms */
+            total_llm_ms?: number | null;
+            /** Tts Start Ms */
+            tts_start_ms?: number | null;
+        };
+        /** TurnsIn */
+        TurnsIn: {
+            /**
+             * Mode
+             * @default browser
+             * @enum {string}
+             */
+            mode: "gemini" | "browser";
+            /** Turns */
+            turns: components["schemas"]["TurnIn"][];
         };
         /** ValidationError */
         ValidationError: {
@@ -319,6 +428,113 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    session_turns_v1_sessions__session_id__turns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionTurns"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_turns_v1_sessions__session_id__turns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TurnsIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionTurns"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_turns_v1_turns_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllTurns"];
+                };
             };
         };
     };
