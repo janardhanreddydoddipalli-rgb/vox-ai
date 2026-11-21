@@ -3,6 +3,9 @@
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL?.trim() || "gemini-3.5-flash";
 
+// Text-embedding model for memory + document retrieval (768 dims).
+export const GEMINI_EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL?.trim() || "gemini-embedding-001";
+
 export const CHAT_CONTEXT_TURNS = (() => {
   const n = Number(process.env.CHAT_CONTEXT_TURNS);
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 8;
