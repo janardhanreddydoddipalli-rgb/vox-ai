@@ -13,9 +13,11 @@ Rules live in `CLAUDE.md`. This page records the threat model, the controls as t
 
 ## Controls in place (M1)
 
+Paths are relative to `apps/web`.
+
 | Control | Where | Test |
 |---|---|---|
-| Auth on every API route except health/auth | `apps/web/src/middleware.ts` + per-route checks | `tests/api-*.test.ts` (401 cases) |
+| Auth on every API route except health/auth | `src/middleware.ts` + per-route checks | `tests/api-*.test.ts` (401 cases) |
 | Ownership: not owned → 404 | Repository functions take `userId`; `/api/voice/tool` and `/api/voice/usage` check the interview before acting | `tests/api-voice-tool.test.ts`, `tests/api-voice-usage.test.ts` |
 | Tools double-check ownership | `ownedInterview()` in `src/agent/tools/interview-tools.ts`; scoring refuses before the paid model call | Handler-level test in `api-voice-tool.test.ts` |
 | Rate limits per route and user | `src/lib/rate-limit.ts` (Upstash in production; allows requests if Upstash is down) | `tests/rate-limit.test.ts`, `tests/voice-rate-limit.test.ts` |
