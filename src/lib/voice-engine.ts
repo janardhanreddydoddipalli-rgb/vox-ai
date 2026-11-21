@@ -4,7 +4,7 @@
 // (SpeechRecognition + speechSynthesis), replies generated server-side by
 // Gemini Flash when GEMINI_API_KEY is configured, local fallback otherwise.
 
-export type Turn = { role: "user" | "assistant"; text: string; latencyMs?: number };
+export type Turn = { role: "user" | "assistant"; text: string; latencyMs?: number; offline?: boolean };
 export type VoiceMode = "gemini" | "browser";
 type Status = "idle" | "listening" | "thinking" | "speaking";
 
@@ -15,7 +15,10 @@ type Handlers = {
   onError: (msg: string) => void;
   onMode: (m: VoiceMode) => void;
   onLevel: (v: number) => void;
+  onOffline: (offline: boolean) => void;
 };
+
+const RESUME_DELAY_MS = 300;
 
 export class VoiceEngine {
   private h: Handlers;
@@ -24,7 +27,11 @@ export class VoiceEngine {
   private raf = 0;
   private recognition: any = null;
   private mode: VoiceMode = "browser";
+  private offline = false;
   private history: { role: "user" | "assistant"; text: string }[] = [];
+  private speaking = false;
+  private abortCtl: AbortController | null = null;
+  private resumeTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(handlers: Handlers) {
     this.h = handlers;
@@ -35,7 +42,13 @@ export class VoiceEngine {
   }
 
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    this.stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
     this.measureLevel();
     const engine = await this.fetchEngine();
     this.mode = engine === "gemini" ? "gemini" : "browser";
@@ -45,9 +58,10 @@ export class VoiceEngine {
 
   private async fetchEngine(): Promise<string | null> {
     try {
-      const res = await fetch("/api/chat");
+      const res = await fetch("/api/health");
       if (!res.ok) return null;
       const data = await res.json();
+      this.h.onOffline(data.engine === "offline");
       return data.engine ?? null;
     } catch {
       return null;
@@ -72,18 +86,21 @@ export class VoiceEngine {
         if (r.isFinal) {
           const text = r[0].transcript.trim();
           if (text) {
+            if (this.speaking) this.bargeIn();
             this.h.onTurn({ role: "user", text });
             this.speak(text);
           }
         } else interim += r[0].transcript;
       }
+      // Barge-in: user started talking while the bot is still speaking.
+      if (this.speaking && interim.trim()) this.bargeIn();
       this.h.onPartial(interim);
     };
     rec.onerror = (e: any) => {
-      if (e.error !== "no-speech") this.h.onError(`Speech recognition: ${e.error}`);
+      if (e.error !== "no-speech" && e.error !== "aborted") this.h.onError(`Speech recognition: ${e.error}`);
     };
     rec.onend = () => {
-      if (this.recognition) {
+      if (this.recognition && !this.speaking) {
         try {
           this.recognition.start();
         } catch {
@@ -95,7 +112,15 @@ export class VoiceEngine {
     this.h.onStatus("listening");
   }
 
-  private speak(text: string) {
+  // User interrupted the bot: cancel TTS and drop the in-flight reply fetch.
+  private bargeIn() {
+    this.speaking = false;
+    window.speechSynthesis?.cancel();
+    this.abortCtl?.abort();
+    this.abortCtl = null;
+  }
+
+  private async speak(text: string) {
     this.h.onStatus("thinking");
     const started = Date.now();
     const synth = window.speechSynthesis;
@@ -103,24 +128,73 @@ export class VoiceEngine {
       this.h.onStatus("listening");
       return;
     }
-    fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userText: text, history: this.history }),
-    })
-      .then((r) => r.json())
-      .then((d) => (d.reply as string) || "Sorry, I had trouble responding.")
-      .catch(() => "Sorry, I had trouble responding.")
-      .then((reply) => {
-        this.history.push({ role: "user", text }, { role: "assistant", text: reply });
-        if (this.history.length > 16) this.history = this.history.slice(-16);
-        const u = new SpeechSynthesisUtterance(reply);
-        u.rate = 1.05;
-        u.onstart = () => this.h.onStatus("speaking");
-        u.onend = () => this.h.onStatus("listening");
-        this.h.onTurn({ role: "assistant", text: reply, latencyMs: Date.now() - started });
-        synth.speak(u);
+    this.abortCtl?.abort();
+    const ctl = new AbortController();
+    this.abortCtl = ctl;
+
+    let reply: string | null;
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userText: text, history: this.history }),
+        signal: ctl.signal,
       });
+      const d = await res.json();
+      if (typeof d.engine === "string") {
+        this.offline = d.engine === "offline";
+        this.h.onOffline(this.offline);
+      }
+      reply = (d.reply as string) || "Sorry, I had trouble responding.";
+    } catch (e: any) {
+      if (e?.name === "AbortError") return; // barged in; drop the reply
+      reply = "Sorry, I had trouble responding.";
+    }
+    if (ctl.signal.aborted || this.abortCtl !== ctl) return;
+
+    this.history.push({ role: "user", text }, { role: "assistant", text: reply });
+    if (this.history.length > 16) this.history = this.history.slice(-16);
+    const u = new SpeechSynthesisUtterance(reply);
+    u.rate = 1.05;
+    u.onstart = () => {
+      this.speaking = true;
+      this.h.onStatus("speaking");
+      // Pause recognition while TTS plays so the bot doesn't hear itself;
+      // barge-in is detected through interim results once it restarts.
+      try {
+        this.recognition?.stop();
+      } catch {}
+    };
+    u.onend = () => {
+      this.speaking = false;
+      this.resumeAfterTts();
+    };
+    this.h.onTurn({ role: "assistant", text: reply, latencyMs: Date.now() - started, offline: this.offline });
+    synth.speak(u);
+  }
+
+  // Give echo tail ~300ms to die out before listening again.
+  private resumeAfterTts() {
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => {
+      this.resumeTimer = null;
+      if (this.recognition) {
+        this.h.onStatus("listening");
+        try {
+          this.recognition.start();
+        } catch {
+          /* already running */
+        }
+      }
+    }, RESUME_DELAY_MS);
+  }
+
+  // Send a typed message through the same pipeline (text fallback mode).
+  sendText(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    this.h.onTurn({ role: "user", text: t });
+    this.speak(t);
   }
 
   private measureLevel() {
@@ -143,6 +217,7 @@ export class VoiceEngine {
 
   stop() {
     cancelAnimationFrame(this.raf);
+    if (this.resumeTimer) clearTimeout(this.resumeTimer);
     if (this.recognition) {
       const rec = this.recognition;
       this.recognition = null;
@@ -151,6 +226,8 @@ export class VoiceEngine {
       } catch {}
     }
     this.analyser = null;
+    this.abortCtl?.abort();
+    this.abortCtl = null;
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     window.speechSynthesis?.cancel();
