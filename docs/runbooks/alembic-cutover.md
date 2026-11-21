@@ -13,6 +13,10 @@ The Alembic baseline (`0001_baseline.py`) builds exactly the schema that Drizzle
 
 **Never run `alembic upgrade` on a database Drizzle already migrated before it's stamped.** The baseline's `CREATE TABLE` statements would fail on existing tables. It runs in one transaction, so nothing would change, but the cutover would be blocked.
 
+## Local and test databases
+
+Since M3, `pnpm db:migrate`, the web test setup and the evals run Alembic. A local database that Drizzle built earlier has no `alembic_version` table, so `upgrade` fails on existing tables. Either recreate it (it's test data), or stamp it: `uv run --directory services/api alembic stamp 0001` with `DATABASE_URL` set.
+
 ## Cutover steps for Neon (production)
 
 Needs explicit approval. Run from `services/api` with the **direct** (non-pooler) URL kept in `apps/web/.env.neon.local`.

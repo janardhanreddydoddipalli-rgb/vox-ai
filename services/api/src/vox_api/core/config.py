@@ -50,6 +50,10 @@ class Settings(BaseSettings):
     # Service credential for /internal/* (sent by apps/web as X-Internal-Token).
     internal_api_token: SecretStr = Field(min_length=32)
 
+    # Shared rate limiting (same Upstash database as apps/web). Unset: in-memory.
+    upstash_redis_rest_url: str | None = None
+    upstash_redis_rest_token: SecretStr | None = None
+
     sentry_dsn: SecretStr | None = None
     sentry_traces_sample_rate: float = Field(default=0.0, ge=0.0, le=1.0)
 

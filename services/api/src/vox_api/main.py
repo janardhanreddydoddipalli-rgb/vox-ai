@@ -14,6 +14,7 @@ from vox_api.core.db import create_engine, create_session_factory
 from vox_api.core.errors import install_error_handlers
 from vox_api.core.logging import configure_logging
 from vox_api.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
+from vox_api.core.rate_limit import build_rate_limiter
 from vox_api.observability.sentry import init_sentry
 
 
@@ -40,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.settings = settings
+    app.state.rate_limiter = build_rate_limiter(settings)
 
     app.add_middleware(
         CORSMiddleware,

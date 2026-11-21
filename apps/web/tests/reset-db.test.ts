@@ -33,7 +33,8 @@ describe("resetDb", () => {
       expect(after.questions).toBe(before.questions);
       expect(after.questions).toBeGreaterThan(0);
       for (const [table, n] of Object.entries(after)) {
-        if (table !== "questions") expect(n, `${table} should be empty`).toBe(0);
+        if (table === "alembic_version") expect(n, "schema revision is kept").toBe(1);
+        else if (table !== "questions") expect(n, `${table} should be empty`).toBe(0);
       }
     } finally {
       await sql.end();

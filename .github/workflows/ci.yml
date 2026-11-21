@@ -45,6 +45,16 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Alembic (services/api) migrates every database; E2E also runs the real API.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+
+      - name: Install API (Python)
+        working-directory: services/api
+        run: uv sync --frozen
+
       - name: Lint
         run: pnpm run lint
 
@@ -59,8 +69,7 @@ jobs:
           git diff --exit-code -- packages/api-client
           pnpm --filter @vox/api-client typecheck
 
-      # Starts from an empty database: creates the vector extension, then
-      # applies every migration (proves a fresh setup works).
+      # Empty database → Alembic upgrade head (pgvector + every revision).
       - name: Migrate (fresh database)
         run: pnpm run db:migrate
 
@@ -73,8 +82,35 @@ jobs:
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: E2E smoke (no model calls)
+      # CI-only key pair and service token (ephemeral, never secrets).
+      - name: Start services/api for E2E
+        run: |
+          node scripts/generate-api-jwt-keys.mjs > "$RUNNER_TEMP/keys.env"
+          echo "API_JWT_PRIVATE_KEY=$(grep '^API_JWT_PRIVATE_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)" >> "$GITHUB_ENV"
+          echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
+          export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
+          cd ../../services/api
+          # The venv's uvicorn, not `uv run`: a long-lived uv process would hold
+          # the uv cache lock and break setup-uv's post-job cache prune.
+          WEB_ORIGIN=http://127.0.0.1:3010 INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789             nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/api.pid"
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
+
+      - name: E2E smoke, every route served by apps/web (ROUTE_*=next)
         run: pnpm run test:e2e
+
+      # Routes moved to services/api in M3 (add one line per moved route).
+      - name: E2E smoke, moved routes served by services/api (ROUTE_*=fastapi)
+        env:
+          ROUTE_MEMORIES: fastapi
+        run: pnpm run test:e2e
+
+      - name: API log, then stop the API
+        if: always()
+        run: |
+          tail -n 50 "$RUNNER_TEMP/api.log" || true
+          kill "$(cat "$RUNNER_TEMP/api.pid")" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()

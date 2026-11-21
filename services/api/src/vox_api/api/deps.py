@@ -1,6 +1,6 @@
 """Shared FastAPI dependencies: settings, a per-request DB session, and the current user."""
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from vox_api.core.config import Settings
 from vox_api.core.db import session_scope
 from vox_api.core.errors import ProblemError
+from vox_api.core.rate_limit import RateLimiter
 from vox_api.core.security import InvalidTokenError, internal_token_matches, verify_access_token
 from vox_api.models import User
 from vox_api.observability.sentry import set_user
@@ -62,3 +63,19 @@ async def require_internal_token(
     """Service-to-service credential for /internal/* (constant-time compare)."""
     if not internal_token_matches(x_internal_token, settings):
         raise ProblemError(401, "Invalid service credential")
+
+
+def rate_limited(name: str, limit: int, window_s: int = 60) -> Callable[..., Awaitable[None]]:
+    """Dependency: at most `limit` calls per `window_s` per user for this route."""
+
+    async def _check(request: Request, user: CurrentUser) -> None:
+        limiter: RateLimiter = request.app.state.rate_limiter
+        decision = await limiter.check(f"{name}:user:{user.id}", limit, window_s)
+        if not decision.allowed:
+            raise ProblemError(
+                429,
+                "Too many requests. Please slow down.",
+                headers={"Retry-After": str(decision.retry_after_s)},
+            )
+
+    return _check

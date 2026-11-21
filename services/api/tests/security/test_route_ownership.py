@@ -9,7 +9,7 @@ while still checking that the registry and the app agree.
 import importlib
 import pkgutil
 
-from fastapi.routing import APIRoute
+from fastapi.routing import iter_route_contexts
 from pydantic import SecretStr
 
 import tests.security
@@ -17,17 +17,24 @@ from vox_api.core.config import Settings
 from vox_api.main import create_app
 
 # "METHOD /path/{param}" -> "module:test_function" in tests.security
-CROSS_USER_TESTS: dict[str, str] = {}
+CROSS_USER_TESTS: dict[str, str] = {
+    "DELETE /v1/memories/{memory_id}": "test_cross_user:test_delete_memory_of_another_user_is_404",
+}
+
+
+def _all_routes() -> set[str]:
+    # FastAPI keeps included routers nested; iter_route_contexts flattens them
+    # (app.routes alone would show none of our API routes).
+    app = create_app(_placeholder_settings())
+    return {
+        f"{method} {ctx.path}"
+        for ctx in iter_route_contexts(app.routes)
+        for method in (ctx.methods or set()) - {"HEAD", "OPTIONS"}
+    }
 
 
 def _routes_with_path_params() -> set[str]:
-    app = create_app(_placeholder_settings())
-    found: set[str] = set()
-    for route in app.routes:
-        if isinstance(route, APIRoute) and "{" in route.path:
-            for method in (route.methods or set()) - {"HEAD", "OPTIONS"}:
-                found.add(f"{method} {route.path}")
-    return found
+    return {r for r in _all_routes() if "{" in r}
 
 
 def _placeholder_settings() -> Settings:
@@ -46,6 +53,12 @@ def _security_test_functions() -> set[str]:
         module = importlib.import_module(f"tests.security.{mod.name}")
         names |= {f"{mod.name}:{n}" for n in dir(module) if n.startswith("test_")}
     return names
+
+
+def test_the_guard_sees_the_real_routes() -> None:
+    """Self-check: an enumerator that finds nothing would make this file pass vacuously."""
+    routes = _all_routes()
+    assert {"GET /v1/me", "POST /internal/users/upsert"} <= routes
 
 
 def test_every_id_route_has_a_cross_user_test() -> None:
