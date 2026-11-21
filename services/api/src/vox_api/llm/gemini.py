@@ -7,7 +7,17 @@ from typing import Any
 
 import httpx
 
-from vox_api.llm.base import EmbeddingTask, Generation, LLMError, Message, StreamChunk
+from vox_api.llm.base import (
+    Conversation,
+    EmbeddingTask,
+    Generation,
+    LLMError,
+    Message,
+    ModelTurn,
+    StreamChunk,
+    ToolCall,
+    ToolSpec,
+)
 from vox_api.models.memory import EMBEDDING_DIMENSIONS
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -17,6 +27,28 @@ def _l2_normalize(v: list[float]) -> list[float]:
     # Truncated (768-dim) embeddings aren't unit length; dot product must equal cosine.
     n = math.sqrt(sum(x * x for x in v))
     return [x / n for x in v] if n > 0 else v
+
+
+def _contents(items: Conversation) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items:
+        if isinstance(item, Message):
+            out.append({"role": item.role, "parts": [{"text": item.text}]})
+            continue
+        parts: list[dict[str, Any]] = []
+        if item.text is not None:
+            parts.append({"text": item.text})
+        parts += [{"functionCall": {"name": c.name, "args": c.args}} for c in item.calls]
+        parts += [{"functionResponse": {"name": n, "response": {"result": r}}} for n, r in item.results]
+        out.append({"role": item.role, "parts": parts})
+    return out
+
+
+def _parts(data: dict[str, Any]) -> list[dict[str, Any]]:
+    parts: list[dict[str, Any]] = ((data.get("candidates") or [{}])[0].get("content") or {}).get(
+        "parts"
+    ) or []
+    return parts
 
 
 def _reply_text(data: dict[str, Any]) -> str:
@@ -35,13 +67,13 @@ class GeminiProvider:
 
     def _body(
         self,
-        messages: Sequence[Message],
+        messages: Conversation,
         system: str | None,
         response_schema: dict[str, Any] | None = None,
         temperature: float | None = None,
         max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
-        body: dict[str, Any] = {"contents": [{"role": m.role, "parts": [{"text": m.text}]} for m in messages]}
+        body: dict[str, Any] = {"contents": _contents(messages)}
         if system:
             body["systemInstruction"] = {"parts": [{"text": system}]}
         config: dict[str, Any] = {}
@@ -58,7 +90,7 @@ class GeminiProvider:
 
     async def generate(
         self,
-        messages: Sequence[Message],
+        messages: Conversation,
         *,
         system: str | None = None,
         response_schema: dict[str, Any] | None = None,
@@ -86,9 +118,50 @@ class GeminiProvider:
             model=self.model,
         )
 
+    async def generate_turn(
+        self,
+        turns: Conversation,
+        *,
+        system: str | None,
+        tools: Sequence[ToolSpec],
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> ModelTurn:
+        body = self._body(turns, system, temperature=temperature, max_output_tokens=max_output_tokens)
+        if tools:
+            body["tools"] = [
+                {
+                    "functionDeclarations": [
+                        {"name": t.name, "description": t.description, "parameters": t.parameters}
+                        for t in tools
+                    ]
+                }
+            ]
+        try:
+            res = await self._client.post(
+                f"{BASE_URL}/models/{self.model}:generateContent", headers=self._headers, json=body
+            )
+        except httpx.HTTPError as exc:
+            raise LLMError(f"Gemini request failed: {type(exc).__name__}") from exc
+        if res.status_code != 200:
+            raise LLMError(f"Gemini generateContent failed: {res.status_code}")
+        data = res.json()
+        parts = _parts(data)
+        usage = data.get("usageMetadata") or {}
+        return ModelTurn(
+            text="".join(str(p.get("text", "")) for p in parts).strip(),
+            calls=[
+                ToolCall(str(p["functionCall"].get("name", "")), dict(p["functionCall"].get("args") or {}))
+                for p in parts
+                if p.get("functionCall")
+            ],
+            tokens_in=int(usage.get("promptTokenCount", 0)),
+            tokens_out=int(usage.get("candidatesTokenCount", 0)),
+        )
+
     async def stream(
         self,
-        messages: Sequence[Message],
+        messages: Conversation,
         *,
         system: str | None = None,
         temperature: float | None = None,

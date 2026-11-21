@@ -141,3 +141,14 @@ async def test_get_turns_of_another_users_session_is_404(
     )
     assert res.status_code == 404
     assert "owner private answer" not in res.text
+
+
+async def test_interview_turn_of_another_user_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    iv, attacker = await _foreign_interview(database_url)
+    res = await client.post(
+        f"/v1/interviews/{iv}/turns", json={"user_text": "hi"}, headers=bearer(mint_token, attacker)
+    )
+    assert res.status_code == 404
+    assert await count_rows(database_url, "agent_steps", "interview_id = $1", iv) == 0

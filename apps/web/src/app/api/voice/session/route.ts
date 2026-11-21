@@ -11,6 +11,9 @@ import { GEMINI_LIVE_MODEL } from "@/lib/config";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { functionDeclarations } from "@/agent/loop";
+// Registers the agent tools in this route's own module graph; without it the live
+// session declares no tools (each route runs as its own function on Vercel).
+import "@/agent/tools/all";
 import { isLanguageCode, languageDirective } from "@/lib/languages";
 import { z } from "zod";
 

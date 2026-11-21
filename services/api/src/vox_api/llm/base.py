@@ -19,6 +19,42 @@ class Message:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    name: str
+    args: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    """A function the model may call: JSON-schema-ish parameters (Gemini's OpenAPI subset)."""
+
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Turn:
+    """One conversation turn: text, the model's tool calls, or the tool results sent back."""
+
+    role: Role
+    text: str | None = None
+    calls: tuple[ToolCall, ...] = ()
+    results: tuple[tuple[str, Any], ...] = ()  # (tool name, result) pairs
+
+
+@dataclass(frozen=True)
+class ModelTurn:
+    text: str
+    calls: list[ToolCall]
+    tokens_in: int
+    tokens_out: int
+
+
+Conversation = Sequence[Message | Turn]
+
+
+@dataclass(frozen=True)
 class Generation:
     text: str
     tokens_in: int
@@ -41,7 +77,7 @@ class LLMProvider(Protocol):
 
     async def generate(
         self,
-        messages: Sequence[Message],
+        messages: Conversation,
         *,
         system: str | None = None,
         response_schema: dict[str, Any] | None = None,
@@ -50,9 +86,21 @@ class LLMProvider(Protocol):
         """One complete reply. With response_schema the reply text is JSON matching it."""
         ...
 
+    async def generate_turn(
+        self,
+        turns: Conversation,
+        *,
+        system: str | None,
+        tools: Sequence[ToolSpec],
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> ModelTurn:
+        """One function-calling round: either tool calls or the final text."""
+        ...
+
     def stream(
         self,
-        messages: Sequence[Message],
+        messages: Conversation,
         *,
         system: str | None = None,
         temperature: float | None = None,

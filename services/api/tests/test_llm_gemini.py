@@ -85,3 +85,47 @@ async def test_embed_rejects_wrong_dimensions() -> None:
     llm, _ = provider(lambda r: httpx.Response(200, json={"embeddings": [{"values": [1.0] * 3072}]}))
     with pytest.raises(LLMError, match="malformed"):
         await llm.embed(["text"], task="RETRIEVAL_DOCUMENT")
+
+
+async def test_generate_turn_sends_tools_and_conversation_and_parses_calls() -> None:
+    from vox_api.llm.base import ToolCall, ToolSpec, Turn
+
+    body = {
+        "candidates": [
+            {"content": {"parts": [{"functionCall": {"name": "get_question", "args": {"level": "mid"}}}]}}
+        ],
+        "usageMetadata": {"promptTokenCount": 30, "candidatesTokenCount": 4},
+    }
+    llm, seen = provider(lambda r: httpx.Response(200, json=body))
+    conversation: list[Message | Turn] = [
+        Message("user", "start"),
+        Turn("model", calls=(ToolCall("read_resume", {}),)),
+        Turn("user", results=(("read_resume", {"skills": ["Go"]}),)),
+    ]
+    spec = ToolSpec("get_question", "Next question", {"type": "object", "properties": {}, "required": []})
+
+    result = await llm.generate_turn(
+        conversation, system="sys", tools=[spec], temperature=0.6, max_output_tokens=1024
+    )
+
+    assert result.calls == [ToolCall("get_question", {"level": "mid"})]
+    assert (result.text, result.tokens_in, result.tokens_out) == ("", 30, 4)
+    sent = json.loads(seen[0].content)
+    assert sent["tools"] == [
+        {
+            "functionDeclarations": [
+                {"name": "get_question", "description": "Next question", "parameters": spec.parameters}
+            ]
+        }
+    ]
+    assert sent["contents"] == [
+        {"role": "user", "parts": [{"text": "start"}]},
+        {"role": "model", "parts": [{"functionCall": {"name": "read_resume", "args": {}}}]},
+        {
+            "role": "user",
+            "parts": [
+                {"functionResponse": {"name": "read_resume", "response": {"result": {"skills": ["Go"]}}}}
+            ],
+        },
+    ]
+    assert sent["generationConfig"] == {"temperature": 0.6, "maxOutputTokens": 1024}

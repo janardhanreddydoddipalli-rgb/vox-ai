@@ -9,7 +9,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests.helpers import fetch_one, insert_user
-from vox_api.llm.base import LLMError, Message, StreamChunk
+from vox_api.llm.base import LLMError, Message, StreamChunk, Turn
 from vox_api.llm.fake import FakeProvider
 from vox_api.services.chat import Usage, chat_events, offline_reply, sentences
 
@@ -28,7 +28,7 @@ class ScriptedStream(FakeProvider):
 
     async def stream(
         self,
-        messages: Sequence[Message],
+        messages: Sequence[Message | Turn],
         *,
         system: str | None = None,
         temperature: float | None = None,
