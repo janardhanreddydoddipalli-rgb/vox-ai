@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { extractPdfText, parseResumeStructure } from "@/lib/resume";
+import { indexDocument } from "@/agent/doc-index";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -57,6 +58,13 @@ export async function POST(req: NextRequest) {
       const structure = await parseResumeStructure(rawText);
       const saved = await saveResume({ userId: user.id, filename: file.name, rawText, ...structure });
       resumeId = saved.id;
+      // Index the resume into doc_chunks for RAG (best-effort: the interview
+      // can proceed without embeddings).
+      try {
+        await indexDocument(user.id, "resume", rawText);
+      } catch (idxErr) {
+        console.error("resume doc indexing failed", idxErr);
+      }
     } catch (err) {
       console.error("resume parse failed", err);
       return NextResponse.json({ error: "Could not parse that PDF. Try another file or skip the resume." }, { status: 400 });
@@ -68,5 +76,13 @@ export async function POST(req: NextRequest) {
     .update(interviews)
     .set({ resumeId: resumeId ?? null, jobDescription: parsedForm.data.jobDescription || null })
     .where(eq(interviews.id, created.id));
+  // Index the job description into doc_chunks as well (best-effort).
+  if (parsedForm.data.jobDescription) {
+    try {
+      await indexDocument(user.id, "jd", parsedForm.data.jobDescription);
+    } catch (idxErr) {
+      console.error("jd doc indexing failed", idxErr);
+    }
+  }
   return NextResponse.json({ id: created.id }, { status: 201 });
 }
