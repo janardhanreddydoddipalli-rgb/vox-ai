@@ -25,9 +25,20 @@ await migrator`CREATE EXTENSION IF NOT EXISTS vector`;
 await migrate(drizzle(migrator), { migrationsFolder: "./drizzle" });
 await migrator.end();
 
-// Per-test cleanup: wipe all rows between tests.
+// Per-test cleanup: wipe every table except the seeded question bank. The
+// table list comes from the database, so tables added by later migrations
+// are covered automatically.
+const KEEP_TABLES = new Set(["questions"]);
+
 export async function resetDb() {
-  const sql = postgres(TEST_URL, { max: 1 });
-  await sql`TRUNCATE agent_steps, interviews, turns, sessions, users, questions CASCADE`;
-  await sql.end();
+  const sql = postgres(TEST_URL, { max: 1, onnotice: () => {} });
+  try {
+    const tables = await sql<{ table_name: string }[]>`
+      select table_name from information_schema.tables
+      where table_schema = 'public' and table_type = 'BASE TABLE'`;
+    const names = tables.map((t) => t.table_name).filter((t) => !KEEP_TABLES.has(t));
+    if (names.length > 0) await sql`TRUNCATE ${sql(names)} CASCADE`;
+  } finally {
+    await sql.end();
+  }
 }
