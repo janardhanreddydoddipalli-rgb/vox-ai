@@ -90,7 +90,10 @@ jobs:
           echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
           export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
           cd ../../services/api
-          WEB_ORIGIN=http://127.0.0.1:3010 INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789             nohup uv run uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          # The venv's uvicorn, not `uv run`: a long-lived uv process would hold
+          # the uv cache lock and break setup-uv's post-job cache prune.
+          WEB_ORIGIN=http://127.0.0.1:3010 INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789             nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/api.pid"
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/api.log"; exit 1
 
@@ -103,9 +106,11 @@ jobs:
           ROUTE_MEMORIES: fastapi
         run: pnpm run test:e2e
 
-      - name: API log
+      - name: API log, then stop the API
         if: always()
-        run: tail -n 50 "$RUNNER_TEMP/api.log" || true
+        run: |
+          tail -n 50 "$RUNNER_TEMP/api.log" || true
+          kill "$(cat "$RUNNER_TEMP/api.pid")" 2>/dev/null || true
 
       - name: Upload Playwright report
         if: failure()
