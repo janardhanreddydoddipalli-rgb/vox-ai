@@ -34,6 +34,11 @@ export async function POST(req: NextRequest) {
   }
   const { sessionId, mode, turns } = parsed.data;
   await ensureSession(userId, sessionId, mode as Mode);
+  // sessionId is client-chosen: if it already belongs to someone else, refuse
+  // (404) before writing, or we'd append to and return their conversation.
+  if (!(await sessionOwnedBy(sessionId, userId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   await addTurns(
     turns.map((t) => ({
       sessionId,
