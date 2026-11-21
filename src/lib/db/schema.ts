@@ -19,6 +19,23 @@ export const sessions = pgTable(
   (t) => [index("sessions_user_id_idx").on(t.userId)],
 );
 
+export const resumes = pgTable(
+  "resumes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    rawText: text("raw_text").notNull(),
+    skills: jsonb("skills").$type<string[]>().notNull().default([]),
+    projects: jsonb("projects").$type<{ name: string; summary: string }[]>().notNull().default([]),
+    experience: jsonb("experience").$type<{ company: string; role: string; period: string | null }[]>().notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("resumes_user_id_idx").on(t.userId)],
+);
+
 export const interviews = pgTable(
   "interviews",
   {
@@ -30,9 +47,47 @@ export const interviews = pgTable(
     level: text("level").notNull(),
     status: text("status").notNull().default("active"), // active | complete
     currentQuestionIndex: integer("current_question_index").notNull().default(0),
+    resumeId: uuid("resume_id").references(() => resumes.id, { onDelete: "set null" }),
+    jobDescription: text("job_description"),
+    report: jsonb("report").$type<ReportJson | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (t) => [index("interviews_user_id_idx").on(t.userId)],
+);
+
+export type ReportJson = {
+  overall: number;
+  strengths: string[];
+  gaps: string[];
+  summary: string;
+};
+
+// One asked question with the candidate's answer and its evaluation.
+export const interviewQa = pgTable(
+  "interview_qa",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    interviewId: uuid("interview_id")
+      .notNull()
+      .references(() => interviews.id, { onDelete: "cascade" }),
+    order: integer("order").notNull(),
+    questionId: text("question_id"),
+    questionText: text("question_text").notNull(),
+    answerText: text("answer_text").notNull(),
+    evaluation: jsonb("evaluation").$type<{
+      score: number;
+      clarity: string;
+      depth: string;
+      correctness: string;
+      missing_points: string[];
+      follow_up_needed: boolean;
+      follow_up_question?: string;
+      better_answer?: string;
+    }>(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("interview_qa_interview_id_idx").on(t.interviewId)],
 );
 
 export const questions = pgTable("questions", {

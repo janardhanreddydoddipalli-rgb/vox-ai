@@ -3,7 +3,7 @@
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 
-const { users, sessions, turns, interviews, questions, agentSteps } = schema;
+const { users, sessions, turns, interviews, questions, agentSteps, resumes, interviewQa } = schema;
 
 export type Mode = "gemini" | "browser";
 export type TurnRow = {
@@ -174,6 +174,69 @@ export async function addAgentStep(step: AgentStepInsert) {
 
 export async function getAgentSteps(interviewId: string) {
   return db.select().from(agentSteps).where(eq(agentSteps.interviewId, interviewId)).orderBy(agentSteps.createdAt, agentSteps.id);
+}
+
+// --- resumes ---------------------------------------------------------------
+export async function saveResume(row: {
+  userId: string;
+  filename: string;
+  rawText: string;
+  skills: string[];
+  projects: { name: string; summary: string }[];
+  experience: { company: string; role: string; period: string | null }[];
+}) {
+  const [r] = await db.insert(resumes).values(row).returning();
+  return r;
+}
+
+export async function getResume(id: string, userId: string) {
+  const [r] = await db.select().from(resumes).where(and(eq(resumes.id, id), eq(resumes.userId, userId))).limit(1);
+  return r ?? null;
+}
+
+// --- interview Q&A + reports ----------------------------------------------
+export async function addInterviewQa(row: {
+  interviewId: string;
+  order: number;
+  questionId: string | null;
+  questionText: string;
+  answerText: string;
+  evaluation: typeof interviewQa.$inferSelect.evaluation;
+}) {
+  const [r] = await db.insert(interviewQa).values(row).returning();
+  return r;
+}
+
+export async function listInterviewQa(interviewId: string) {
+  return db.select().from(interviewQa).where(eq(interviewQa.interviewId, interviewId)).orderBy(interviewQa.order);
+}
+
+export async function countInterviewQa(interviewId: string) {
+  const rows = await db.select({ id: interviewQa.id }).from(interviewQa).where(eq(interviewQa.interviewId, interviewId));
+  return rows.length;
+}
+
+export async function saveInterviewReport(id: string, report: NonNullable<typeof interviews.$inferSelect.report>) {
+  const [r] = await db
+    .update(interviews)
+    .set({ report, status: "complete", completedAt: new Date() })
+    .where(eq(interviews.id, id))
+    .returning();
+  return r ?? null;
+}
+
+export async function listInterviews(userId: string) {
+  return db.select().from(interviews).where(eq(interviews.userId, userId)).orderBy(desc(interviews.createdAt)).limit(50);
+}
+
+export async function latestQaScores(userId: string) {
+  const rows = await db
+    .select({ interviewId: interviewQa.interviewId, order: interviewQa.order, evaluation: interviewQa.evaluation, createdAt: interviewQa.createdAt })
+    .from(interviewQa)
+    .innerJoin(interviews, eq(interviewQa.interviewId, interviews.id))
+    .where(eq(interviews.userId, userId))
+    .orderBy(interviewQa.createdAt);
+  return rows;
 }
 
 // --- deletion (privacy) --------------------------------------------------
