@@ -21,6 +21,7 @@ export default function Home() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [partial, setPartial] = useState("");
   const [error, setError] = useState("");
+  const [offline, setOffline] = useState(false);
   const [mode, setMode] = useState<VoiceMode | null>(null);
   const [level, setLevel] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -104,6 +105,7 @@ export default function Home() {
       onError: (m) => setError(m),
       onMode: setMode,
       onLevel: setLevel,
+      onOffline: setOffline,
     });
     try {
       await engine.current.start();
@@ -137,6 +139,7 @@ export default function Home() {
           Vox
         </div>
         <div className="meta">
+          {offline && <span className="pill pill-offline">Offline mode</span>}
           {mode && <span className="pill">{mode === "gemini" ? "Gemini · Flash" : "Browser speech"}</span>}
           {active && <span className="pill">{mm}:{ss}</span>}
         </div>

@@ -61,6 +61,9 @@ export async function POST(req: NextRequest) {
   }
 
   // Fallback brain so the pipeline still works without a key or on upstream errors.
+  // Marked engine:"offline" so the UI can show a badge; the reason is logged server-side.
+  const reason = key ? "Gemini upstream failed" : "GEMINI_API_KEY not configured";
+  console.warn(`[chat] serving offline fallback (${reason}) for: ${userText.slice(0, 80)}`);
   const text = userText.toLowerCase();
   let reply: string;
   if (/^(hi|hello|hey)\b/.test(text)) reply = "Hello! I'm your voice assistant. What can I do for you?";
@@ -70,5 +73,5 @@ export async function POST(req: NextRequest) {
   else if (text.includes("thank")) reply = "You're welcome!";
   else reply = `You said: ${userText}. I'm running without a Gemini key right now, so my replies are simple.`;
 
-  return NextResponse.json({ reply, engine: "fallback" });
+  return NextResponse.json({ reply, engine: "offline" });
 }
