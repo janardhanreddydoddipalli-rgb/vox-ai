@@ -22,6 +22,8 @@ export default function Home() {
   const [partial, setPartial] = useState("");
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
+  const [textMode, setTextMode] = useState(false);
+  const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<VoiceMode | null>(null);
   const [level, setLevel] = useState(0);
   const [elapsed, setElapsed] = useState(0);
@@ -110,12 +112,46 @@ export default function Home() {
     try {
       await engine.current.start();
     } catch (e: any) {
-      setError(e?.message?.includes("Permission") || e?.name === "NotAllowedError"
-        ? "Microphone access was denied. Allow the mic in your browser and try again."
-        : `Could not start: ${e?.message ?? e}`);
       engine.current.stop();
+      // No SpeechRecognition (Safari/Firefox) or mic denied: drop to text mode
+      // so the user can still chat through the same pipeline.
+      if (e?.name === "NotAllowedError" || e?.name === "NotFoundError") {
+        setTextMode(true);
+        setError("Microphone unavailable or permission denied — switched to text mode. You can still type below.");
+        if (!engine.current) return;
+      } else {
+        setError(e?.message?.includes("Permission") || e?.name === "NotAllowedError"
+          ? "Microphone access was denied. Allow the mic in your browser and try again."
+          : `Could not start: ${e?.message ?? e}`);
+      }
       setStatus("idle");
     }
+  };
+
+  const sendText = (e: React.FormEvent) => {
+    e.preventDefault();
+    const t = draft.trim();
+    if (!t) return;
+    if (!engine.current) startTextOnlyEngine();
+    engine.current?.sendText(t);
+    setDraft("");
+  };
+
+  // Text-only engine: same reply pipeline, no mic/recognition.
+  const startTextOnlyEngine = () => {
+    engine.current = new VoiceEngine({
+      onStatus: setStatus,
+      onTurn: (t) => {
+        setTurns((prev) => [...prev, t]);
+        setPartial("");
+      },
+      onPartial: setPartial,
+      onError: (m) => setError(m),
+      onMode: (m) => setMode(m),
+      onLevel: () => {},
+      onOffline: setOffline,
+    });
+    setMode("browser");
   };
 
   const stop = () => {
@@ -171,6 +207,21 @@ export default function Home() {
           </button>
         )}
       </div>
+
+      {(textMode || active) && (
+        <form className="textbar" onSubmit={sendText}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder={textMode ? "Type your message (mic unavailable)…" : "Or type instead of speaking…"}
+            aria-label="Type a message"
+            maxLength={2000}
+          />
+          <button className="btn primary" type="submit" disabled={!draft.trim()}>
+            Send
+          </button>
+        </form>
+      )}
 
       {error && (
         <p className="error" role="alert">
