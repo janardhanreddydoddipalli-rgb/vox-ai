@@ -28,6 +28,19 @@ Paths are relative to `apps/web`.
 | Secrets outside git | `.gitignore` (`.env`, `.env*.local`), gitleaks pre-commit hook | `gitleaks` scan (see below) |
 | Supply chain | pnpm blocks dependency install scripts unless listed in `allowBuilds`; Dependabot | — |
 
+## API controls (services/api, M2)
+
+| Control | Where | Test |
+|---|---|---|
+| EdDSA-only JWT verification (public key only; iss, aud, exp, iat, sub=uuid, jti required; 30 s leeway) | `core/security.py`, `api/deps.py` | `tests/test_auth.py` (expired, wrong aud/iss, tampered, other key, HS256 alg confusion, missing claims, non-uuid sub, deleted user) |
+| Service credential for `/internal/*`, constant-time compare, hidden from OpenAPI | `api/deps.py`, `main.py` | `tests/test_internal_users.py` |
+| Every error is problem+json; validation errors never echo input | `core/errors.py` | `tests/test_health_and_errors.py` |
+| CORS: only `WEB_ORIGIN`, no credentials | `main.py` | `test_cors_allows_only_the_web_origin` |
+| Logs: JSON, request_id, never bodies; Sentry user id only, bodies/cookies/auth headers scrubbed | `core/logging.py`, `core/middleware.py`, `observability/sentry.py` | (reviewed) |
+| No docs or schema in production | `main.py` | `test_docs_and_schema_are_hidden_in_production` |
+| Container runs as non-root uid 10001 | `infra/docker/api.Dockerfile` | `api.yml` docker smoke |
+| Any `{id}` route must have a cross-user (404) test | `tests/security/test_route_ownership.py` | runs in CI |
+
 ## Known gaps (tracked)
 
 - **Live voice trusts the browser for usage numbers and the setup frame.** Fix in M3: a server-issued `voice_session_id`, ephemeral tokens with locked config, and a duration-based usage floor (`docs/verification.md` Q1, Q2).

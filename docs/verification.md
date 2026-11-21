@@ -41,3 +41,16 @@ relevance sanity: sim(query, pooling doc)=0.736 > sim(query, react doc)=0.565 ->
 | Unique answer order | `332456e` | 6 concurrent saves all got order 0 before the fix; migration renumbered `0,0,0,1,3 → 0,1,2,3,4` on a scratch DB | VERIFIED |
 | Google-only sign-in | `0299588` | Provider list was `[google, resend]` before the fix, `[google]` after | VERIFIED |
 | No transcript text in logs; language validated | `e9b103e` | 4 failed before, passed after | VERIFIED |
+
+## M2: FastAPI skeleton (2026-11-22)
+
+| Item | Evidence | Status |
+|---|---|---|
+| Postgres 18.7 + pgvector 0.8.7 in compose and CI (= Neon) | Image checked; web suite, migrate and E2E pass on it | VERIFIED |
+| Alembic baseline = Drizzle 0000–0008 | `pg_dump --schema-only` of a Drizzle-built DB vs an Alembic-built DB: **empty diff** (only pg_dump's random `\restrict` token lines differ). Pinned in CI by `test_schema_baseline.py`, which was shown to fail on a one-character default change | VERIFIED |
+| Neon production matches Drizzle 0000–0008 | `scripts/verify_drizzle_schema.py`, read-only: columns 77, constraints 86, indexes 23, extensions 2, all identical | VERIFIED (not stamped yet) |
+| `alembic check` (models = migrations) | "No new upgrade operations detected." | VERIFIED |
+| Web-minted token accepted by the API | Token from `apps/web/src/lib/api-token.ts` → running uvicorn `/v1/me` 200; one char flipped → 401 | VERIFIED |
+| Internal upsert from the web code | `upsertUserViaApi` twice → same id; wrong credential → 401 | VERIFIED |
+| API image | 79 MB, uid 10001, health/ready OK, `alembic current` in the image, Docker HEALTHCHECK healthy | VERIFIED (locally) |
+| `make` targets | `make` isn't installed on the dev machine; every underlying command was run directly | PARTIAL |
