@@ -89,7 +89,10 @@ export const interviewQa = pgTable(
     }>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("interview_qa_interview_id_idx").on(t.interviewId)],
+  (t) => [
+    index("interview_qa_interview_id_idx").on(t.interviewId),
+    uniqueIndex("interview_qa_interview_order_key").on(t.interviewId, t.order),
+  ],
 );
 
 export const questions = pgTable("questions", {
