@@ -16,6 +16,9 @@ jobs:
   evals:
     # 20-case scripted-conversation eval against the real model.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -33,20 +36,25 @@ jobs:
       EVAL_PASS_THRESHOLD: ${{ inputs.pass_threshold }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
       - name: Install
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
       - name: Eval (threshold gate)
-        run: npm run eval
+        run: pnpm run eval
 
   e2e-real-model:
     # Full text interview → scored report → PDF, against the real model.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -64,28 +72,30 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
+          cache: pnpm
       - name: Install
-        run: npm ci
+        run: pnpm install --frozen-lockfile
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
       - name: Migrate (fresh database)
-        run: npm run db:migrate
+        run: pnpm run db:migrate
       - name: Seed question bank
-        run: npx tsx scripts/seed-questions.ts
+        run: pnpm exec tsx scripts/seed-questions.ts
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium
       - name: E2E (real model)
-        run: npm run test:e2e:real-model
+        run: pnpm run test:e2e:real-model
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-real-model
           path: |
-            playwright-report/
-            test-results/
+            apps/web/playwright-report/
+            apps/web/test-results/
           retention-days: 7

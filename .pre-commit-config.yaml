@@ -1,0 +1,29 @@
+# Pre-commit hooks: `pip install pre-commit` (or `pipx install pre-commit`), then
+# `pre-commit install` once per clone. Run on everything: `pre-commit run --all-files`.
+repos:
+  # Secret scanning on staged changes: blocks commits containing keys/tokens.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.24.2
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=2048"]
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
+        exclude: ^apps/web/tsconfig\.json$ # tsconfig allows comments
+
+  # ESLint for the web app (whole-project run: same result as CI, ~20 s).
+  - repo: local
+    hooks:
+      - id: eslint-web
+        name: eslint (apps/web)
+        entry: pnpm --filter @vox/web lint
+        language: system
+        pass_filenames: false
+        files: ^apps/web/.*\.(ts|tsx|js|jsx|mjs|cjs)$
