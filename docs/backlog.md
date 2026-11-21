@@ -9,7 +9,7 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Align Postgres versions.** CI (`ci.yml`, `evals.yml`) and `compose.yaml` use `pgvector/pgvector:pg16`, but production Neon runs **Postgres 18.7** (pgvector 0.8.7). Move both to a pg18 image in one PR and confirm migrations and tests pass, so CI tests what production runs.
 
-- **Terms page.** The landing-page footer links to `/terms`, which doesn't exist (404). Write a Terms of Service page or remove the link. Legal text is a product decision, so it wasn't invented in M1. (`/terms` was removed from the sitemap in M1.)
+- **Terms page (Phase 13, launch).** The footer link to `/terms` was removed because the page didn't exist (decision 2026-11-22). Add a Terms of Service page and restore the link at launch; `tests/internal-links.test.ts` will fail if the link returns before the page does.
 
 ## M3
 
