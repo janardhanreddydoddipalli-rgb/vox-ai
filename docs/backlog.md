@@ -13,6 +13,8 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Report PDFs in Hindi, Tamil and Telugu are unreadable.** The PDF writer (web and its API port) uses only the built-in Helvetica fonts and replaces non-ASCII characters with `?`. Fix: embed a Noto font for each script (e.g. via reportlab with TTF fonts) in `services/api/src/vox_api/services/report_pdf.py`.
 
+- **Langfuse tracing for API agent turns.** apps/web traces each agent turn (tools, tokens, latency, cost) to Langfuse when keys are set; the services/api port records tool steps (`agent_steps`) and usage (`token_usage`) but doesn't send Langfuse traces yet. Add the Langfuse Python SDK behind the same env vars (metadata only, never transcripts).
+
 ## M3
 
 - Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).

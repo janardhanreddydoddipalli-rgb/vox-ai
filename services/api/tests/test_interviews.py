@@ -220,7 +220,7 @@ async def test_end_generates_report_and_memories_and_meters_usage(
     assert res.status_code == 200
     assert res.json()["report"] == REPORT
     assert len(llm.calls) == 2
-    assert "Write every field of the report in English" in llm.calls[0][0].text
+    assert "Write every field of the report in English" in str(llm.calls[0][0].text)
     assert await count_rows(database_url, "user_memories", "user_id = $1", me) == 1
     assert await count_rows(database_url, "token_usage", "user_id = $1 and tokens_in > 0", me) == 1
 

@@ -27,6 +27,7 @@ CROSS_USER_TESTS: dict[str, str] = {
     "POST /v1/interviews/{interview_id}/end": "test_cross_user:test_end_interview_of_another_user_is_404",
     "GET /v1/interviews/{interview_id}/report.pdf": "test_cross_user:test_report_pdf_of_another_user_is_404",
     "GET /v1/interviews/{interview_id}/steps": "test_cross_user:test_agent_steps_of_another_user_is_404",
+    "POST /v1/interviews/{interview_id}/turns": "test_cross_user:test_interview_turn_of_another_user_is_404",
 }
 
 

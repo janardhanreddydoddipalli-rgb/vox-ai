@@ -45,7 +45,7 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "S", "A", "C4", "SIM", "RUF", "ASY
 ignore = []
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106"] # asserts and fake test credentials
+"tests/**" = ["S101", "S105", "S106", "S311", "E501"] # asserts, fake credentials, seeded RNG, long SQL
 "alembic/versions/**" = ["E501"]
 
 [tool.mypy]

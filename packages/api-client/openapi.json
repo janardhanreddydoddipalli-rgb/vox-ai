@@ -1354,6 +1354,66 @@
         ]
       }
     },
+    "/v1/interviews/{interview_id}/turns": {
+      "post": {
+        "operationId": "interview_turn_v1_interviews__interview_id__turns_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "interview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Interview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "One interview turn: the agent asks, evaluates and replies (SSE)",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
     "/v1/me": {
       "delete": {
         "operationId": "delete_me_v1_me_delete",

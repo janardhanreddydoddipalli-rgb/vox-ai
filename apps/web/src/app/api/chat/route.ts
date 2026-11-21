@@ -16,6 +16,7 @@ import type { LoopResult } from "@/agent/loop";
 import "@/agent/tools/all";
 import { routeTarget } from "@/lib/route-flags";
 import { apiFetch, apiErrorResponse } from "@/lib/api-server";
+import { agentTurnViaApi } from "@/lib/agent-proxy";
 
 export const runtime = "nodejs";
 
@@ -78,6 +79,12 @@ export async function POST(req: NextRequest) {
       status: 200,
       headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform", Connection: "keep-alive" },
     });
+  }
+
+  // Interview mode is served by services/api when ROUTE_AGENT=fastapi (it applies
+  // the same rate limit and cost guard itself).
+  if (interviewMode && routeTarget("AGENT") === "fastapi") {
+    return agentTurnViaApi(userId, parsed.data, req.signal);
   }
 
   const limited = await checkRate(req, "chat", userId);

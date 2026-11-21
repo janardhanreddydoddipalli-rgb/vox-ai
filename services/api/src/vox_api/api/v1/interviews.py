@@ -4,12 +4,14 @@ import uuid
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, Response, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from pydantic import StringConstraints
 
 from vox_api.api.deps import CurrentUser, DbSession, LLMDep, SettingsDep, rate_limited
+from vox_api.api.v1.chat import ChatIn
 from vox_api.core.errors import ProblemError
-from vox_api.llm.base import LLMError
+from vox_api.llm.base import LLMError, Message
 from vox_api.rag.ingest import index_document
 from vox_api.repositories import interviews as repo
 from vox_api.schemas.interviews import (
@@ -26,7 +28,7 @@ from vox_api.schemas.interviews import (
     ScoreList,
     ScorePoint,
 )
-from vox_api.services import cost_guard, memory, report, report_pdf, resume
+from vox_api.services import agent_turn, cost_guard, memory, report, report_pdf, resume
 
 router = APIRouter(prefix="/interviews", tags=["interviews"])
 log = structlog.get_logger("vox_api.interviews")
@@ -232,3 +234,34 @@ async def report_as_pdf(interview_id: uuid.UUID, user: CurrentUser, db: DbSessio
 async def agent_steps(interview_id: uuid.UUID, user: CurrentUser, db: DbSession) -> AgentSteps:
     iv = await _owned(db, user, interview_id)
     return AgentSteps(steps=[AgentStepOut.model_validate(s) for s in await repo.steps_for(db, iv.id)])
+
+
+@router.post(
+    "/{interview_id}/turns",
+    summary="One interview turn: the agent asks, evaluates and replies (SSE)",
+    response_class=StreamingResponse,
+    responses={
+        **RESPONSES_404,
+        200: {"content": {"text/event-stream": {}}},
+        429: {"description": "Rate limited"},
+    },
+    dependencies=[Depends(rate_limited("chat", limit=30))],
+)
+async def interview_turn(
+    interview_id: uuid.UUID,
+    body: ChatIn,
+    request: Request,
+    user: CurrentUser,
+    db: DbSession,
+    llm: LLMDep,
+    settings: SettingsDep,
+) -> StreamingResponse:
+    await _owned(db, user, interview_id)  # 404 before the stream opens
+    history = [Message("model" if t.role == "assistant" else "user", t.text) for t in body.history]
+    return StreamingResponse(
+        agent_turn.turn_events(
+            request.app.state.session_factory, llm, settings, user.id, interview_id, body.user_text, history
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
