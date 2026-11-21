@@ -1,7 +1,7 @@
 import { auth, signIn } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-// Sign-in options: Google OAuth and email magic link (Resend). A provider
+// Sign-in: Google OAuth only (docs/adr/0002-google-only-auth.md). The button
 // renders only when its env vars are configured.
 export default async function SignIn({ searchParams }: { searchParams: Promise<{ callbackUrl?: string }> }) {
   const { callbackUrl = "/dashboard" } = await searchParams;
@@ -9,7 +9,6 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
   if (session?.user) redirect(callbackUrl);
 
   const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-  const emailEnabled = Boolean(process.env.RESEND_API_KEY);
   const e2eButton = process.env.E2E_TEST_AUTH === "1";
 
   return (
@@ -28,23 +27,9 @@ export default async function SignIn({ searchParams }: { searchParams: Promise<{
           </button>
         </form>
       )}
-      {emailEnabled && (
-        <form
-          action={async (fd: FormData) => {
-            "use server";
-            await signIn("resend", { email: fd.get("email"), redirectTo: callbackUrl });
-          }}
-        >
-          <input name="email" type="email" required placeholder="you@example.com" aria-label="Email" />
-          <button className="btn" type="submit">
-            Email me a magic link
-          </button>
-        </form>
-      )}
-      {!googleEnabled && !emailEnabled && !e2eButton && (
+      {!googleEnabled && !e2eButton && (
         <p className="error">
-          No sign-in provider is configured. Set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET (OAuth) or
-          RESEND_API_KEY (magic link) in the environment.
+          No sign-in provider is configured. Set GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in the environment.
         </p>
       )}
       {e2eButton && (

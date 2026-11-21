@@ -43,8 +43,19 @@ async function executeTool(name: string, args: unknown, interviewId: string | nu
     body: JSON.stringify({ name, args, interviewId }),
   });
   const data = await res.json().catch(() => ({ ok: false, error: "tool route unreachable" }));
-  if (!data.ok) return { error: data.error ?? "tool failed" };
+  if (!data.ok) return { error: data.error ?? "tool failed", message: data.message };
   return data.result;
+}
+
+async function reportUsage(interviewId: string | null, promptTokens: number, responseTokens: number) {
+  const res = await fetch("/api/voice/usage", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ interviewId, promptTokens, responseTokens }),
+  });
+  if (!res.ok) return { budgetExceeded: false, message: null };
+  const data = await res.json().catch(() => ({}));
+  return { budgetExceeded: data.budgetExceeded === true, message: data.message ?? null };
 }
 
 export class VoiceEngine {
@@ -75,6 +86,7 @@ export class VoiceEngine {
         handlers: this.h,
         config,
         toolExecutor: (name, args) => executeTool(name, args, this.interviewId),
+        usageReporter: (promptTokens, responseTokens) => reportUsage(this.interviewId, promptTokens, responseTokens),
       });
       live.language = this.language;
       live.interviewId = this.interviewId;

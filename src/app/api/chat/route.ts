@@ -283,7 +283,8 @@ export async function POST(req: NextRequest) {
       // Offline fallback: no key, upstream failure, or stream died before the
       // first token. Marked via meta.engine="offline" so the UI shows a badge.
       const reason = key ? "Gemini upstream failed" : "GEMINI_API_KEY not configured";
-      console.warn(`[chat] serving offline fallback (${reason}) for: ${userText.slice(0, 80)}`);
+      // Never log transcript text — ids and lengths only.
+      console.warn(`[chat] serving offline fallback (${reason}) user=${userId ?? "anon"} chars=${userText.length}`);
       const text = userText.toLowerCase();
       let reply: string;
       if (/^(hi|hello|hey)\b/.test(text)) reply = "Hello! I'm your voice assistant. What can I do for you?";

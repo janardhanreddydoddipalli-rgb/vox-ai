@@ -12,11 +12,17 @@ import { upsertUserByEmail } from "@/lib/db";
 import { getTool, type ToolContext } from "@/agent/tools";
 import { addAgentStep } from "@/lib/db/repository";
 import { loadInterview } from "@/agent/state";
+import { checkDailyBudget } from "@/lib/cost-guard";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { startToolSpan } from "@/lib/tracing";
 import "@/agent/tools/all";
 
 export const runtime = "nodejs";
+
+// Own bucket, separate from text chat. A live interview issues a few tool
+// calls per answer (question, evaluation, resume lookups); 120/min leaves
+// ample headroom for bursts while still capping a runaway client.
+const VOICE_TOOL_LIMIT = 120;
 
 const bodySchema = z.object({
   name: z.string().min(1).max(64),
@@ -29,21 +35,27 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const limited = await checkRate(req, "chat", session.user.email);
+  const user = await upsertUserByEmail(session.user.email);
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(user.id);
+
+  const limited = await checkRate(req, "voice-tool", user.id, VOICE_TOOL_LIMIT);
   if (limited) return limited;
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid tool call" }, { status: 400 });
   const { name, args, interviewId } = parsed.data;
 
-  const user = await upsertUserByEmail(session.user.email);
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  setSentryUser(user.id);
-
   // Ownership: the interview id comes from the browser, so it must belong to
   // the signed-in user before any tool runs. Not owned → 404 (no existence leak).
   if (interviewId && !(await loadInterview(interviewId, user.id))) {
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
+  }
+  // Cost guard: an over-budget user's live session gets no more tool work;
+  // the client ends the session when it sees budget_exceeded.
+  const budget = await checkDailyBudget(user.id);
+  if (!budget.allowed) {
+    return NextResponse.json({ ok: false, error: "budget_exceeded", message: budget.message });
   }
   const ctx: ToolContext = { userId: user.id, interviewId };
 

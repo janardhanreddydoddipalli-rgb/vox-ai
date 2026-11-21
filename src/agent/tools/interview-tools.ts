@@ -2,7 +2,7 @@
 // handler }, registered into the global registry on import.
 import { z } from "zod";
 import { GEMINI_MODEL } from "@/lib/config";
-import { listQuestions, getResume, getInterview, addInterviewQa, countInterviewQa } from "@/lib/db/repository";
+import { listQuestions, getResume, getInterview, appendInterviewQa } from "@/lib/db/repository";
 import { registerTool, type ToolContext } from "./index";
 import { advanceQuestion, completeInterview } from "../state";
 
@@ -238,10 +238,8 @@ async function recordQa(ctx: ToolContext, questionId: string, questionText: stri
   if (!ctx.interviewId) return;
   if (!(await ownedInterview(ctx))) return;
   try {
-    const order = await countInterviewQa(ctx.interviewId);
-    await addInterviewQa({
+    await appendInterviewQa({
       interviewId: ctx.interviewId,
-      order,
       questionId: questionId.startsWith("resume:") ? null : questionId,
       questionText,
       answerText,

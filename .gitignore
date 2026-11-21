@@ -7,3 +7,4 @@ node_modules/
 
 # Added by ML AI Code: build output and caches
 test-results/
+playwright-report/

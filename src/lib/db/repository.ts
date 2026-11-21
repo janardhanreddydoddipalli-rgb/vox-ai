@@ -201,25 +201,30 @@ export async function getResume(id: string, userId: string) {
 }
 
 // --- interview Q&A + reports ----------------------------------------------
-export async function addInterviewQa(row: {
+// Appends an answered question at the next order number. The interview row
+// is locked (FOR UPDATE) for the transaction, so concurrent saves for one
+// interview serialise instead of both reading the same count; the unique
+// (interview_id, order) index is the backstop.
+export async function appendInterviewQa(row: {
   interviewId: string;
-  order: number;
   questionId: string | null;
   questionText: string;
   answerText: string;
   evaluation: typeof interviewQa.$inferSelect.evaluation;
 }) {
-  const [r] = await db.insert(interviewQa).values(row).returning();
-  return r;
+  return db.transaction(async (tx) => {
+    await tx.select({ id: interviews.id }).from(interviews).where(eq(interviews.id, row.interviewId)).for("update");
+    const [{ next }] = await tx
+      .select({ next: sql<number>`coalesce(max(${interviewQa.order}) + 1, 0)::int` })
+      .from(interviewQa)
+      .where(eq(interviewQa.interviewId, row.interviewId));
+    const [r] = await tx.insert(interviewQa).values({ ...row, order: next }).returning();
+    return r;
+  });
 }
 
 export async function listInterviewQa(interviewId: string) {
   return db.select().from(interviewQa).where(eq(interviewQa.interviewId, interviewId)).orderBy(interviewQa.order);
-}
-
-export async function countInterviewQa(interviewId: string) {
-  const rows = await db.select({ id: interviewQa.id }).from(interviewQa).where(eq(interviewQa.interviewId, interviewId));
-  return rows.length;
 }
 
 export async function saveInterviewReport(id: string, report: NonNullable<typeof interviews.$inferSelect.report>) {

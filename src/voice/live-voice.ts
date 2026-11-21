@@ -34,12 +34,19 @@ export type LiveSessionConfig = {
 
 export type ToolExecutor = (name: string, args: unknown) => Promise<unknown>;
 
+export type UsageVerdict = { budgetExceeded: boolean; message: string | null };
+/** Forwards one usageMetadata frame to the server's cost guard. */
+export type UsageReporter = (promptTokens: number, responseTokens: number) => Promise<UsageVerdict>;
+
 export type LiveVoiceOptions = {
   handlers: Handlers;
   config: LiveSessionConfig;
   /** Executes one agent tool call and returns its JSON result. */
   toolExecutor: ToolExecutor;
+  usageReporter: UsageReporter;
 };
+
+const BUDGET_FALLBACK_MESSAGE = "You've reached today's practice budget, so I'll pause here. It resets tomorrow.";
 
 
 type PendingTurn = {
@@ -250,6 +257,22 @@ registerProcessor("pcm", Pcm);`,
       this.connectMs = Date.now() - this.startedAt;
     }
 
+    // Token usage → server cost guard. Fire-and-forget so audio never waits
+    // on it; an over-budget verdict ends the session.
+    if (msg.usageMetadata) {
+      const u = msg.usageMetadata;
+      const promptTokens = Number(u.promptTokenCount) || 0;
+      const responseTokens = Number(u.responseTokenCount ?? u.candidatesTokenCount) || 0;
+      if (promptTokens > 0 || responseTokens > 0) {
+        this.opts
+          .usageReporter(promptTokens, responseTokens)
+          .then((v) => {
+            if (v.budgetExceeded) this.endForBudget(v.message);
+          })
+          .catch(() => {});
+      }
+    }
+
     const content = msg.serverContent;
     if (content) {
       if (content.interrupted) {
@@ -298,6 +321,11 @@ registerProcessor("pcm", Pcm);`,
         } catch (e: any) {
           response = { error: e?.message ?? "tool failed" };
         }
+        const r = response as { error?: string; message?: string } | null;
+        if (r?.error === "budget_exceeded") {
+          this.endForBudget(r.message ?? null);
+          return;
+        }
         this.ws?.send(
           JSON.stringify({
             toolResponse: {
@@ -345,6 +373,15 @@ registerProcessor("pcm", Pcm);`,
       });
     }
     this.h.onStatus("listening");
+  }
+
+  // Over the daily budget: close the live session and tell the user in the
+  // transcript (the same message the text path speaks).
+  private endForBudget(message: string | null) {
+    if (this.closed) return;
+    this.stop();
+    this.h.onTurn({ role: "assistant", text: message ?? BUDGET_FALLBACK_MESSAGE });
+    this.h.onStatus("idle");
   }
 
   private flushAssistantTurn() {

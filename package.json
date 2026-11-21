@@ -7,11 +7,14 @@
     "build": "next build",
     "start": "next start -p 3000",
     "test": "vitest run",
+    "test:e2e": "playwright test --grep-invert @real-model",
+    "test:e2e:real-model": "playwright test --grep @real-model",
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate.mjs",
     "eval": "tsx evals/run.ts",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@auth/drizzle-adapter": "^1.11.3",
     "@sentry/nextjs": "^11.16.0",
     "@upstash/ratelimit": "^2.2.1",
     "@upstash/redis": "^1.41.0",

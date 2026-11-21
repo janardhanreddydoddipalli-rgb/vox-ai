@@ -2,17 +2,30 @@
 // from the server; the key comes from the environment.
 import { GEMINI_EMBEDDING_MODEL } from "./config";
 
+// gemini-embedding-001 returns 3072 dims unless outputDimensionality is set;
+// the pgvector columns are vector(768), so it is always requested explicitly.
 export const EMBEDDING_DIMENSIONS = 768;
 
-// Dot product of two equal-length vectors (both unit-normalized by the
-// embedding API, so this is the cosine similarity).
+// Documents (stored) and queries (searched with) are embedded differently;
+// matching task types measurably improves retrieval.
+export type EmbeddingTaskType = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
+
+// Dot product of two equal-length vectors (both unit-normalized by
+// embedTexts, so this is the cosine similarity).
 export function cosineSimilarity(a: number[], b: number[]): number {
   let dot = 0;
   for (let i = 0; i < a.length; i++) dot += a[i] * b[i];
   return dot;
 }
 
-export async function embedTexts(texts: string[]): Promise<number[][]> {
+// Truncated (Matryoshka) embeddings are not unit length; re-normalise so
+// dot product and pgvector cosine distance agree.
+function l2Normalize(v: number[]): number[] {
+  const n = Math.sqrt(v.reduce((s, x) => s + x * x, 0));
+  return n > 0 ? v.map((x) => x / n) : v;
+}
+
+export async function embedTexts(texts: string[], taskType: EmbeddingTaskType = "RETRIEVAL_DOCUMENT"): Promise<number[][]> {
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) throw new Error("GEMINI_API_KEY is not set");
   if (texts.length === 0) return [];
@@ -26,6 +39,8 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
         requests: texts.map((t) => ({
           model: `models/${GEMINI_EMBEDDING_MODEL}`,
           content: { parts: [{ text: t }] },
+          taskType,
+          outputDimensionality: EMBEDDING_DIMENSIONS,
         })),
       }),
     },
@@ -36,9 +51,10 @@ export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (!embeddings || embeddings.length !== texts.length || embeddings.some((e) => e.length !== EMBEDDING_DIMENSIONS)) {
     throw new Error("Gemini embeddings returned a malformed response");
   }
-  return embeddings;
+  return embeddings.map(l2Normalize);
 }
 
-export async function embedText(text: string): Promise<number[]> {
-  return (await embedTexts([text]))[0];
+// Single-text helper for search queries (memory recall, document search).
+export async function embedText(text: string, taskType: EmbeddingTaskType = "RETRIEVAL_QUERY"): Promise<number[]> {
+  return (await embedTexts([text], taskType))[0];
 }
