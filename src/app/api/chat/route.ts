@@ -7,6 +7,7 @@ import { upsertUserByEmail } from "@/lib/db";
 import { listMemoriesByKind } from "@/lib/db/repository";
 import { runAgentLoop, type LoopMessage } from "@/agent/loop";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
+import { languageDirective } from "@/lib/languages";
 import { startInterview, loadInterview } from "@/agent/state";
 import "@/agent/tools/all";
 
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         }
         // Load the candidate's known weaknesses so the interviewer drills
         // them first. Best-effort: an empty memory bank changes nothing.
-        let systemPrompt = INTERVIEWER_SYSTEM_PROMPT;
+        let systemPrompt = INTERVIEWER_SYSTEM_PROMPT + languageDirective(interview.language ?? "en");
         try {
           const weaknesses = await listMemoriesByKind(userId, "weakness", 5);
           if (weaknesses.length > 0) {

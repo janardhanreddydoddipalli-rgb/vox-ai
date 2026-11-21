@@ -49,6 +49,7 @@ export const interviews = pgTable(
     currentQuestionIndex: integer("current_question_index").notNull().default(0),
     resumeId: uuid("resume_id").references(() => resumes.id, { onDelete: "set null" }),
     jobDescription: text("job_description"),
+    language: text("language").notNull().default("en"), // BCP-47 tag: en | hi | ta | te
     report: jsonb("report").$type<ReportJson | null>(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     completedAt: timestamp("completed_at", { withTimezone: true }),

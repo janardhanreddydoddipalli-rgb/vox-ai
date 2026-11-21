@@ -20,6 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     status: iv.status,
     questionCount: qa.length,
     hasResume: !!iv.resumeId,
+    language: iv.language ?? "en",
     qa: qa.map((q) => ({
       order: q.order,
       question: q.questionText,

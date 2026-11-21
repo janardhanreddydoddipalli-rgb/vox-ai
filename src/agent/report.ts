@@ -4,6 +4,7 @@
 import { z } from "zod";
 import { GEMINI_MODEL } from "@/lib/config";
 import { listInterviewQa, getInterview, saveInterviewReport } from "@/lib/db/repository";
+import { languageName } from "@/lib/languages";
 import { registerTool, type ToolContext } from "./tools";
 
 export const reportSchema = z.object({
@@ -58,7 +59,9 @@ export async function generateReportForInterview(interviewId: string, userId: st
               text:
                 "Write an interview report from this transcript. For EVERY question include a better_answer: " +
                 "a model spoken-style answer (3-6 short sentences) that would have scored 10. " +
-                "overall = average of the per-answer scores rounded to one decimal.\n\n" + transcript,
+                "overall = average of the per-answer scores rounded to one decimal.\n" +
+                `Write every field of the report in ${languageName(iv.language ?? "en")} (keep technical terms in English where that is the industry norm).\n\n` +
+                transcript,
             },
           ],
         },

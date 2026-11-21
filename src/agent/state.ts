@@ -13,6 +13,7 @@ export type InterviewState = {
   level: string;
   status: string;
   currentQuestionIndex: number;
+  language: string;
 };
 
 export async function startInterview(userId: string, role: string, level: string): Promise<InterviewState> {
@@ -23,6 +24,7 @@ export async function startInterview(userId: string, role: string, level: string
     level: row.level,
     status: row.status,
     currentQuestionIndex: row.currentQuestionIndex,
+    language: row.language ?? "en",
   };
 }
 
@@ -36,6 +38,7 @@ export async function loadInterview(id: string, userId: string): Promise<Intervi
     level: row.level,
     status: row.status,
     currentQuestionIndex: row.currentQuestionIndex,
+    language: row.language ?? "en",
   };
 }
 

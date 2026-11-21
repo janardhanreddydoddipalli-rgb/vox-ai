@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { INTERVIEW_LANGUAGES, type LanguageCode } from "@/lib/languages";
+
 const ROLES = ["Frontend Engineer", "Backend Engineer", "Full-stack Engineer", "DSA / Coding", "HR / Behavioral"];
 const LEVELS = [
   { value: "junior", label: "Junior", hint: "0–2 years" },
@@ -14,6 +16,7 @@ export default function NewInterviewPage() {
   const router = useRouter();
   const [role, setRole] = useState("");
   const [level, setLevel] = useState<"junior" | "mid" | "senior">("mid");
+  const [language, setLanguage] = useState<LanguageCode>("en");
   const [jd, setJd] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +76,7 @@ export default function NewInterviewPage() {
       const form = new FormData();
       form.set("role", role.trim());
       form.set("level", level);
+      form.set("language", language);
       form.set("jobDescription", jd);
       if (file) form.set("resume", file);
       const res = await fetch("/api/interviews", { method: "POST", body: form });
@@ -122,8 +126,24 @@ export default function NewInterviewPage() {
           ))}
         </div>
 
+        <h2>3. Language</h2>
+        <div className="chips" role="radiogroup" aria-label="Interview language">
+          {INTERVIEW_LANGUAGES.map((l) => (
+            <button
+              key={l.code}
+              className={`chip ${language === l.code ? "chip-active" : ""}`}
+              role="radio"
+              aria-checked={language === l.code}
+              onClick={() => setLanguage(l.code)}
+              type="button"
+            >
+              {l.label}
+            </button>
+          ))}
+        </div>
+
         <h2>
-          3. Resume <span className="chip-hint">(optional, PDF up to 5 MB)</span>
+          4. Resume <span className="chip-hint">(optional, PDF up to 5 MB)</span>
         </h2>
         <label className="file-label">
           <input
@@ -136,7 +156,7 @@ export default function NewInterviewPage() {
         </label>
 
         <h2>
-          4. Job description <span className="chip-hint">(optional, pasted text)</span>
+          5. Job description <span className="chip-hint">(optional, pasted text)</span>
         </h2>
         <textarea
           value={jd}
@@ -147,7 +167,7 @@ export default function NewInterviewPage() {
           disabled={submitting}
         />
 
-        <h2>5. Mic check</h2>
+        <h2>6. Mic check</h2>
         {micState === "ok" ? (
           <p className="mic-ok">Mic works — you&apos;re set for voice mode.</p>
         ) : micState === "denied" ? (

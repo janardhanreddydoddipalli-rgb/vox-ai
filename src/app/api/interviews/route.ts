@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 const formSchema = z.object({
   role: z.string().trim().min(1, "Role is required").max(80),
   level: z.enum(["junior", "mid", "senior"]),
+  language: z.enum(["en", "hi", "ta", "te"]).default("en"),
   jobDescription: z.string().trim().max(8000).optional().default(""),
 });
 
@@ -38,6 +39,7 @@ export async function POST(req: NextRequest) {
   const parsedForm = formSchema.safeParse({
     role: form.get("role"),
     level: form.get("level"),
+    language: form.get("language") ?? "en",
     jobDescription: form.get("jobDescription") ?? "",
   });
   if (!parsedForm.success) {
@@ -74,7 +76,11 @@ export async function POST(req: NextRequest) {
   const created = await createInterview(user.id, parsedForm.data.role, parsedForm.data.level);
   await db
     .update(interviews)
-    .set({ resumeId: resumeId ?? null, jobDescription: parsedForm.data.jobDescription || null })
+    .set({
+      resumeId: resumeId ?? null,
+      jobDescription: parsedForm.data.jobDescription || null,
+      language: parsedForm.data.language,
+    })
     .where(eq(interviews.id, created.id));
   // Index the job description into doc_chunks as well (best-effort).
   if (parsedForm.data.jobDescription) {
