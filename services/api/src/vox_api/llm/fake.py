@@ -3,10 +3,10 @@
 import hashlib
 import math
 import random
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
-from vox_api.llm.base import EmbeddingTask, Generation, Message
+from vox_api.llm.base import EmbeddingTask, Generation, Message, StreamChunk
 from vox_api.models.memory import EMBEDDING_DIMENSIONS
 
 
@@ -42,10 +42,21 @@ class FakeProvider:
         prompt = " ".join(filter(None, [system, *(m.text for m in messages)]))
         return Generation(text=reply, tokens_in=_tokens(prompt), tokens_out=_tokens(reply), model=self.model)
 
-    async def stream(self, messages: Sequence[Message], *, system: str | None = None) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: Sequence[Message],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> AsyncGenerator[StreamChunk]:
         reply = self._next_reply(messages)
-        for i, word in enumerate(reply.split(" ")):
-            yield word if i == 0 else f" {word}"
+        words = reply.split(" ")
+        for i, word in enumerate(words):
+            text = word if i == 0 else f" {word}"
+            last = i == len(words) - 1
+            prompt = " ".join(filter(None, [system, *(m.text for m in messages)]))
+            yield StreamChunk(text, _tokens(prompt) if last else 0, _tokens(reply) if last else 0)
 
     async def embed(self, texts: Sequence[str], *, task: EmbeddingTask) -> list[list[float]]:
         return [_unit_vector(f"{task}:{t}") for t in texts]

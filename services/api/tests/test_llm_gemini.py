@@ -56,11 +56,16 @@ async def test_generate_errors_raise_llm_error(response: httpx.Response) -> None
 
 
 async def test_stream_yields_text_chunks() -> None:
-    events = [{"candidates": [{"content": {"parts": [{"text": t}]}}]} for t in ["He", "llo"]]
+    events: list[dict[str, object]] = [
+        {"candidates": [{"content": {"parts": [{"text": t}]}}]} for t in ["He", "llo"]
+    ]
+    events.append({"usageMetadata": {"promptTokenCount": 9, "candidatesTokenCount": 2}})
     sse = "".join(f"data: {json.dumps(e)}\r\n\r\n" for e in events)
     llm, seen = provider(lambda r: httpx.Response(200, text=sse))
-    chunks = [c async for c in llm.stream([Message("user", "hi")])]
-    assert chunks == ["He", "llo"]
+    chunks = [c async for c in llm.stream([Message("user", "hi")], temperature=0.7, max_output_tokens=512)]
+    assert [c.text for c in chunks] == ["He", "llo", ""]
+    assert (chunks[-1].tokens_in, chunks[-1].tokens_out) == (9, 2)
+    assert json.loads(seen[0].content)["generationConfig"] == {"temperature": 0.7, "maxOutputTokens": 512}
     assert seen[0].url.params["alt"] == "sse"
 
 

@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/v1/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stream a spoken reply (SSE: meta, token, sentence, done | error) */
+        post: operations["chat_stream_v1_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/health": {
         parameters: {
             query?: never;
@@ -311,6 +328,13 @@ export interface components {
             /** Role */
             role: string;
         };
+        /** ChatIn */
+        ChatIn: {
+            /** History */
+            history?: components["schemas"]["HistoryTurn"][];
+            /** User Text */
+            user_text: string;
+        };
         /** DeletedAccount */
         DeletedAccount: {
             /** Sessions Deleted */
@@ -341,6 +365,16 @@ export interface components {
              * @constant
              */
             status: "ok";
+        };
+        /** HistoryTurn */
+        HistoryTurn: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Text */
+            text: string;
         };
         /** InterviewCreated */
         InterviewCreated: {
@@ -620,6 +654,46 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    chat_stream_v1_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Rate limited */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     health_v1_health_get: {
         parameters: {
             query?: never;

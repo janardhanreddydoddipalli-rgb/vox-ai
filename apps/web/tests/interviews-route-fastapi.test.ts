@@ -178,3 +178,20 @@ describe("interview routes with ROUTE_INTERVIEWS=fastapi", () => {
     expect(dash.qaScores).toEqual([{ interviewId: IV, order: 0, score: 8, createdAt: "2026-11-22T10:05:00.000Z" }]);
   });
 });
+
+describe("dashboard loader with every flag on next", () => {
+  it("never needs the API (API_INTERNAL_URL may be unset)", async () => {
+    delete process.env.ROUTE_INTERVIEWS;
+    const saved = process.env.API_INTERNAL_URL;
+    delete process.env.API_INTERNAL_URL;
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    try {
+      const user = await upsertUserByEmail("user-a@example.com");
+      await expect(loadDashboard(user!.id)).resolves.toMatchObject({ interviews: [], sessions: [] });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      process.env.API_INTERNAL_URL = saved;
+    }
+  });
+});

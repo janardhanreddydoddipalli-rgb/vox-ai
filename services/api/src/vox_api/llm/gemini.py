@@ -2,12 +2,12 @@
 
 import json
 import math
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, Sequence
 from typing import Any
 
 import httpx
 
-from vox_api.llm.base import EmbeddingTask, Generation, LLMError, Message
+from vox_api.llm.base import EmbeddingTask, Generation, LLMError, Message, StreamChunk
 from vox_api.models.memory import EMBEDDING_DIMENSIONS
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
@@ -39,6 +39,7 @@ class GeminiProvider:
         system: str | None,
         response_schema: dict[str, Any] | None = None,
         temperature: float | None = None,
+        max_output_tokens: int | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {"contents": [{"role": m.role, "parts": [{"text": m.text}]} for m in messages]}
         if system:
@@ -46,6 +47,8 @@ class GeminiProvider:
         config: dict[str, Any] = {}
         if temperature is not None:
             config["temperature"] = temperature
+        if max_output_tokens is not None:
+            config["maxOutputTokens"] = max_output_tokens
         if response_schema is not None:
             config["responseMimeType"] = "application/json"
             config["responseSchema"] = response_schema
@@ -83,22 +86,37 @@ class GeminiProvider:
             model=self.model,
         )
 
-    async def stream(self, messages: Sequence[Message], *, system: str | None = None) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        messages: Sequence[Message],
+        *,
+        system: str | None = None,
+        temperature: float | None = None,
+        max_output_tokens: int | None = None,
+    ) -> AsyncGenerator[StreamChunk]:
         url = f"{BASE_URL}/models/{self.model}:streamGenerateContent?alt=sse"
-        async with self._client.stream(
-            "POST", url, headers=self._headers, json=self._body(messages, system)
-        ) as res:
-            if res.status_code != 200:
-                raise LLMError(f"Gemini streamGenerateContent failed: {res.status_code}")
-            async for line in res.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                try:
-                    piece = _reply_text(json.loads(line[6:]))
-                except json.JSONDecodeError:
-                    continue
-                if piece:
-                    yield piece
+        body = self._body(messages, system, temperature=temperature, max_output_tokens=max_output_tokens)
+        try:
+            async with self._client.stream("POST", url, headers=self._headers, json=body) as res:
+                if res.status_code != 200:
+                    raise LLMError(f"Gemini streamGenerateContent failed: {res.status_code}")
+                async for line in res.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    try:
+                        event = json.loads(line[6:])
+                    except json.JSONDecodeError:
+                        continue
+                    usage = event.get("usageMetadata") or {}
+                    chunk = StreamChunk(
+                        _reply_text(event),
+                        int(usage.get("promptTokenCount", 0)),
+                        int(usage.get("candidatesTokenCount", 0)),
+                    )
+                    if chunk.text or chunk.tokens_in or chunk.tokens_out:
+                        yield chunk
+        except httpx.HTTPError as exc:
+            raise LLMError(f"Gemini stream failed: {type(exc).__name__}") from exc
 
     async def embed(self, texts: Sequence[str], *, task: EmbeddingTask) -> list[list[float]]:
         if not texts:

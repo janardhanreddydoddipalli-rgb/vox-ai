@@ -24,8 +24,9 @@ async def test_generate_uses_scripted_replies_then_echoes() -> None:
 
 async def test_stream_yields_the_reply_in_order() -> None:
     chunks = [c async for c in FakeProvider(replies=["one two three"]).stream(MSGS)]
-    assert "".join(chunks) == "one two three"
+    assert "".join(c.text for c in chunks) == "one two three"
     assert len(chunks) == 3
+    assert chunks[-1].tokens_out == 3  # usage arrives on the last chunk
 
 
 async def test_embeddings_are_deterministic_unit_vectors_of_the_right_size() -> None:
