@@ -20,6 +20,7 @@ export default function Home() {
   const [status, setStatus] = useState<Status>("idle");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [partial, setPartial] = useState("");
+  const [replyPartial, setReplyPartial] = useState("");
   const [error, setError] = useState("");
   const [offline, setOffline] = useState(false);
   const [textMode, setTextMode] = useState(false);
@@ -107,8 +108,10 @@ export default function Home() {
       onTurn: (t) => {
         setTurns((prev) => [...prev, t]);
         setPartial("");
+        setReplyPartial("");
       },
       onPartial: setPartial,
+      onReplyPartial: setReplyPartial,
       onError: (m) => setError(m),
       onMode: setMode,
       onLevel: setLevel,
@@ -149,8 +152,10 @@ export default function Home() {
       onTurn: (t) => {
         setTurns((prev) => [...prev, t]);
         setPartial("");
+        setReplyPartial("");
       },
       onPartial: setPartial,
+      onReplyPartial: setReplyPartial,
       onError: (m) => setError(m),
       onMode: (m) => setMode(m),
       onLevel: () => {},
@@ -249,12 +254,21 @@ export default function Home() {
             <span className="who">{t.role === "user" ? "You" : "Vox"}</span>
             <p>{t.text}</p>
             {t.latencyMs != null && <span className="latency">{t.latencyMs} ms</span>}
+            {t.role === "assistant" && t.firstTokenMs != null && (
+              <span className="latency">first word in {t.firstTokenMs} ms</span>
+            )}
           </div>
         ))}
         {partial && (
           <div className="turn user pending">
             <span className="who">You</span>
             <p>{partial}</p>
+          </div>
+        )}
+        {replyPartial && (
+          <div className="turn assistant pending">
+            <span className="who">Vox</span>
+            <p>{replyPartial}▌</p>
           </div>
         )}
       </section>

@@ -12,6 +12,10 @@ export type TurnRow = {
   role: string;
   text: string;
   latencyMs: number | null;
+  sttMs: number | null;
+  firstTokenMs: number | null;
+  totalLlmMs: number | null;
+  ttsStartMs: number | null;
   createdAt: Date;
 };
 
@@ -49,20 +53,38 @@ export async function listSessions(userId: string) {
 }
 
 // --- turns -------------------------------------------------------------
-export async function addTurn(sessionId: string, role: "user" | "assistant", text: string, latencyMs?: number) {
-  const [row] = await db
-    .insert(turns)
-    .values({ sessionId, role, text, latencyMs: latencyMs ?? null })
-    .returning();
+export type TurnInsert = {
+  sessionId: string;
+  role: "user" | "assistant";
+  text: string;
+  latencyMs?: number;
+  sttMs?: number;
+  firstTokenMs?: number;
+  totalLlmMs?: number;
+  ttsStartMs?: number;
+};
+
+function toRow(sessionId: string, r: TurnInsert) {
+  return {
+    sessionId,
+    role: r.role,
+    text: r.text,
+    latencyMs: r.latencyMs ?? null,
+    sttMs: r.sttMs ?? null,
+    firstTokenMs: r.firstTokenMs ?? null,
+    totalLlmMs: r.totalLlmMs ?? null,
+    ttsStartMs: r.ttsStartMs ?? null,
+  };
+}
+
+export async function addTurn(sessionId: string, r: TurnInsert) {
+  const [row] = await db.insert(turns).values(toRow(sessionId, r)).returning();
   return row;
 }
 
-export async function addTurns(rows: { sessionId: string; role: "user" | "assistant"; text: string; latencyMs?: number }[]) {
+export async function addTurns(rows: TurnInsert[]) {
   if (rows.length === 0) return [];
-  return db
-    .insert(turns)
-    .values(rows.map((r) => ({ sessionId: r.sessionId, role: r.role, text: r.text, latencyMs: r.latencyMs ?? null })))
-    .returning();
+  return db.insert(turns).values(rows.map((r) => toRow(r.sessionId, r))).returning();
 }
 
 // Turns for sessions the user owns — ownership is enforced by the session list.
@@ -75,6 +97,10 @@ export async function getTurnsForSessions(sessionIds: string[]): Promise<TurnRow
     role: r.role,
     text: r.text,
     latencyMs: r.latencyMs,
+    sttMs: r.sttMs,
+    firstTokenMs: r.firstTokenMs,
+    totalLlmMs: r.totalLlmMs,
+    ttsStartMs: r.ttsStartMs,
     createdAt: r.createdAt,
   }));
 }

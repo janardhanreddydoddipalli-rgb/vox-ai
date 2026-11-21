@@ -1,10 +1,21 @@
 "use client";
 
 // Voice engine: speech in and out via the browser's Web Speech API
-// (SpeechRecognition + speechSynthesis), replies generated server-side by
-// Gemini Flash when GEMINI_API_KEY is configured, local fallback otherwise.
+// (SpeechRecognition + speechSynthesis). Replies stream from POST /api/chat
+// as Server-Sent Events (meta / token / sentence / done / error); each
+// completed sentence is queued to TTS immediately so speech starts on the
+// first sentence instead of after the whole reply.
 
-export type Turn = { role: "user" | "assistant"; text: string; latencyMs?: number; offline?: boolean };
+export type Turn = {
+  role: "user" | "assistant";
+  text: string;
+  latencyMs?: number;
+  offline?: boolean;
+  sttMs?: number;
+  firstTokenMs?: number;
+  totalLlmMs?: number;
+  ttsStartMs?: number;
+};
 export type VoiceMode = "gemini" | "browser";
 type Status = "idle" | "listening" | "thinking" | "speaking";
 
@@ -12,6 +23,7 @@ type Handlers = {
   onStatus: (s: Status) => void;
   onTurn: (t: Turn) => void;
   onPartial: (text: string) => void;
+  onReplyPartial: (text: string) => void;
   onError: (msg: string) => void;
   onMode: (m: VoiceMode) => void;
   onLevel: (v: number) => void;
@@ -30,8 +42,10 @@ export class VoiceEngine {
   private offline = false;
   private history: { role: "user" | "assistant"; text: string }[] = [];
   private speaking = false;
+  private ttsQueue: SpeechSynthesisUtterance[] = [];
   private abortCtl: AbortController | null = null;
   private resumeTimer: ReturnType<typeof setTimeout> | null = null;
+  private sttStart = 0;
 
   constructor(handlers: Handlers) {
     this.h = handlers;
@@ -86,15 +100,20 @@ export class VoiceEngine {
         if (r.isFinal) {
           const text = r[0].transcript.trim();
           if (text) {
+            const sttMs = this.sttStart ? Date.now() - this.sttStart : undefined;
+            this.sttStart = 0;
             if (this.speaking) this.bargeIn();
-            this.h.onTurn({ role: "user", text });
-            this.speak(text);
+            this.h.onTurn({ role: "user", text, sttMs });
+            this.speak(text, sttMs);
           }
         } else interim += r[0].transcript;
       }
       // Barge-in: user started talking while the bot is still speaking.
       if (this.speaking && interim.trim()) this.bargeIn();
       this.h.onPartial(interim);
+    };
+    rec.onspeechstart = () => {
+      if (!this.sttStart) this.sttStart = Date.now();
     };
     rec.onerror = (e: any) => {
       if (e.error !== "no-speech" && e.error !== "aborted") this.h.onError(`Speech recognition: ${e.error}`);
@@ -112,15 +131,17 @@ export class VoiceEngine {
     this.h.onStatus("listening");
   }
 
-  // User interrupted the bot: cancel TTS and drop the in-flight reply fetch.
+  // User interrupted the bot: flush the TTS queue, cancel current speech and
+  // abort the in-flight SSE stream.
   private bargeIn() {
     this.speaking = false;
+    this.ttsQueue = [];
     window.speechSynthesis?.cancel();
     this.abortCtl?.abort();
     this.abortCtl = null;
   }
 
-  private async speak(text: string) {
+  private async speak(text: string, sttMs?: number) {
     this.h.onStatus("thinking");
     const started = Date.now();
     const synth = window.speechSynthesis;
@@ -132,7 +153,32 @@ export class VoiceEngine {
     const ctl = new AbortController();
     this.abortCtl = ctl;
 
-    let reply: string | null;
+    let gotFirstToken = false;
+    let full = "";
+    let firstTokenMs: number | undefined;
+    let totalLlmMs: number | undefined;
+    let streamError: string | null = null;
+    let firstSpokenAt: number | null = null;
+
+    const queueSentence = (sentence: string) => {
+      const s = sentence.trim();
+      if (!s) return;
+      const u = new SpeechSynthesisUtterance(s);
+      u.rate = 1.05;
+      u.onstart = () => {
+        if (firstSpokenAt == null) firstSpokenAt = Date.now() - started;
+        this.speaking = true;
+        this.h.onStatus("speaking");
+        // Pause recognition while TTS plays so the bot doesn't hear itself.
+        try {
+          this.recognition?.stop();
+        } catch {}
+      };
+      u.onend = () => this.speakNext(synth);
+      this.ttsQueue.push(u);
+      if (!synth.speaking && !synth.pending) this.speakNext(synth);
+    };
+
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
@@ -140,36 +186,120 @@ export class VoiceEngine {
         body: JSON.stringify({ userText: text, history: this.history }),
         signal: ctl.signal,
       });
-      const d = await res.json();
-      if (typeof d.engine === "string") {
-        this.offline = d.engine === "offline";
-        this.h.onOffline(this.offline);
+      if (!res.ok || !res.body) throw new Error(`stream unavailable (${res.status})`);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        const blocks = buf.split("\n\n");
+        buf = blocks.pop() ?? "";
+        for (const block of blocks) {
+          const lines = block.split("\n");
+          const event = lines.find((l) => l.startsWith("event: "))?.slice(7).trim();
+          const dataLine = lines.find((l) => l.startsWith("data: "));
+          if (!event || !dataLine) continue;
+          let data: any;
+          try {
+            data = JSON.parse(dataLine.slice(6));
+          } catch {
+            continue;
+          }
+
+          if (event === "meta") {
+            this.offline = data.engine === "offline";
+            this.h.onOffline(this.offline);
+          } else if (event === "token") {
+            if (!gotFirstToken) {
+              gotFirstToken = true;
+              firstTokenMs = data.first_token_ms ?? Date.now() - started;
+            }
+            full += data.text ?? "";
+            this.h.onReplyPartial(full); // live tokens in the transcript
+          } else if (event === "sentence") {
+            queueSentence(data.text ?? "");
+          } else if (event === "done") {
+            totalLlmMs = data.total_llm_ms ?? Date.now() - started;
+          } else if (event === "error") {
+            streamError = data.message ?? "The reply was cut off.";
+            this.h.onError(streamError ?? "The reply was cut off.");
+          }
+        }
       }
-      reply = (d.reply as string) || "Sorry, I had trouble responding.";
     } catch (e: any) {
       if (e?.name === "AbortError") return; // barged in; drop the reply
-      reply = "Sorry, I had trouble responding.";
+      streamError = e?.message ?? "stream failed";
+      console.warn("chat stream failed before first token:", streamError);
     }
+
     if (ctl.signal.aborted || this.abortCtl !== ctl) return;
 
-    this.history.push({ role: "user", text }, { role: "assistant", text: reply });
-    if (this.history.length > 16) this.history = this.history.slice(-16);
-    const u = new SpeechSynthesisUtterance(reply);
-    u.rate = 1.05;
-    u.onstart = () => {
-      this.speaking = true;
-      this.h.onStatus("speaking");
-      // Pause recognition while TTS plays so the bot doesn't hear itself;
-      // barge-in is detected through interim results once it restarts.
-      try {
-        this.recognition?.stop();
-      } catch {}
-    };
-    u.onend = () => {
+    // Offline fallback when the stream failed before the first token arrived.
+    if (!gotFirstToken && streamError) {
+      const fallback = "Sorry, I had trouble responding. I'm running in offline mode right now.";
+      const fallbackStart = Date.now();
+      this.offline = true;
+      this.h.onOffline(true);
+      this.history.push({ role: "user", text }, { role: "assistant", text: fallback });
+      if (this.history.length > 16) this.history = this.history.slice(-16);
+      this.h.onTurn({
+        role: "assistant",
+        text: fallback,
+        latencyMs: Date.now() - started,
+        offline: true,
+        sttMs,
+        firstTokenMs: Date.now() - started,
+        totalLlmMs: Date.now() - started,
+        ttsStartMs: Date.now() - started,
+      });
+      const u = new SpeechSynthesisUtterance(fallback);
+      u.rate = 1.05;
+      u.onstart = () => {
+        this.speaking = true;
+        this.h.onStatus("speaking");
+      };
+      u.onend = () => {
+        this.speaking = false;
+        this.resumeAfterTts();
+      };
+      void fallbackStart;
+      synth.speak(u);
+      return;
+    }
+
+    if (full.trim()) {
+      const ttsStartMs = firstSpokenAt ?? Date.now() - started;
+      this.history.push({ role: "user", text }, { role: "assistant", text: full });
+      if (this.history.length > 16) this.history = this.history.slice(-16);
+      this.h.onTurn({
+        role: "assistant",
+        text: full,
+        latencyMs: Date.now() - started,
+        offline: this.offline,
+        sttMs,
+        firstTokenMs,
+        totalLlmMs,
+        ttsStartMs,
+      });
+    }
+
+    // Nothing was queued (empty reply): resume listening.
+    if (this.ttsQueue.length === 0 && !this.speaking) {
+      this.resumeAfterTts();
+    }
+  }
+
+  private speakNext(synth: SpeechSynthesis) {
+    const u = this.ttsQueue.shift();
+    if (!u) {
       this.speaking = false;
       this.resumeAfterTts();
-    };
-    this.h.onTurn({ role: "assistant", text: reply, latencyMs: Date.now() - started, offline: this.offline });
+      return;
+    }
     synth.speak(u);
   }
 
@@ -228,6 +358,7 @@ export class VoiceEngine {
     this.analyser = null;
     this.abortCtl?.abort();
     this.abortCtl = null;
+    this.ttsQueue = [];
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
     window.speechSynthesis?.cancel();

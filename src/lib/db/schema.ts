@@ -27,6 +27,10 @@ export const turns = pgTable(
     role: text("role").notNull(),
     text: text("text").notNull(),
     latencyMs: integer("latency_ms"),
+    sttMs: integer("stt_ms"),
+    firstTokenMs: integer("first_token_ms"),
+    totalLlmMs: integer("total_llm_ms"),
+    ttsStartMs: integer("tts_start_ms"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

@@ -22,6 +22,10 @@ export const savedTurnSchema = z
     role: z.enum(["user", "assistant"]),
     text: z.string().trim().min(1).max(5000),
     latencyMs: z.number().finite().int().nonnegative().optional(),
+    sttMs: z.number().finite().int().nonnegative().optional(),
+    firstTokenMs: z.number().finite().int().nonnegative().optional(),
+    totalLlmMs: z.number().finite().int().nonnegative().optional(),
+    ttsStartMs: z.number().finite().int().nonnegative().optional(),
   })
   .strip();
 

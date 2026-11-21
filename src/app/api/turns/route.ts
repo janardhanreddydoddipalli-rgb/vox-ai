@@ -32,7 +32,18 @@ export async function POST(req: NextRequest) {
   }
   const { sessionId, mode, turns } = parsed.data;
   await ensureSession(userId, sessionId, mode as Mode);
-  await addTurns(turns.map((t) => ({ sessionId, role: t.role, text: t.text, latencyMs: t.latencyMs })));
+  await addTurns(
+    turns.map((t) => ({
+      sessionId,
+      role: t.role,
+      text: t.text,
+      latencyMs: t.latencyMs,
+      sttMs: t.sttMs,
+      firstTokenMs: t.firstTokenMs,
+      totalLlmMs: t.totalLlmMs,
+      ttsStartMs: t.ttsStartMs,
+    })),
+  );
   const saved = await getTurnsForSessions([sessionId]);
   return NextResponse.json({ ok: true, turns: saved });
 }
