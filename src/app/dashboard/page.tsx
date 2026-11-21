@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { upsertUserByEmail, listSessions, getTurnsForSessions } from "@/lib/db";
+import { upsertUserByEmail, listSessions, getTurnsForSessions, listInterviews, latestQaScores } from "@/lib/db";
 import DashboardClient from "./dashboard-client";
 
 // Server component: load the signed-in user's own history only.
@@ -12,6 +12,8 @@ export default async function Dashboard() {
   const user = await upsertUserByEmail(email);
   const sessions = user ? await listSessions(user.id) : [];
   const turns = await getTurnsForSessions(sessions.map((s) => s.id));
+  const interviews = user ? await listInterviews(user.id) : [];
+  const qaScores = user ? await latestQaScores(user.id) : [];
 
   return (
     <main>
@@ -24,6 +26,20 @@ export default async function Dashboard() {
           text: t.text,
           latencyMs: t.latencyMs,
           createdAt: t.createdAt.toISOString(),
+        }))}
+        interviews={interviews.map((iv) => ({
+          id: iv.id,
+          role: iv.role,
+          level: iv.level,
+          status: iv.status,
+          overall: iv.report?.overall ?? null,
+          createdAt: iv.createdAt.toISOString(),
+        }))}
+        qaScores={qaScores.map((q) => ({
+          interviewId: q.interviewId,
+          order: q.order,
+          score: q.evaluation?.score ?? null,
+          createdAt: q.createdAt.toISOString(),
         }))}
       />
     </main>
