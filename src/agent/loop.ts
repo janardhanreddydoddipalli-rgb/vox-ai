@@ -33,8 +33,9 @@ export type LoopResult = {
 };
 
 // Gemini FunctionDeclarations built from the registry (name, description,
-// zod-derived JSON schema).
-function functionDeclarations() {
+// zod-derived JSON schema). Shared by the text agent loop and the live-voice
+// session setup so both paths expose exactly the same tools.
+export function functionDeclarations() {
   return toolRegistry().map((t) => ({
     name: t.name,
     description: t.description,
