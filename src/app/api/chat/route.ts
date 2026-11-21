@@ -9,6 +9,7 @@ import { runAgentLoop, type LoopMessage } from "@/agent/loop";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { languageDirective } from "@/lib/languages";
 import { startInterview, loadInterview } from "@/agent/state";
+import { setSentryUser, captureVoxError } from "@/lib/observability";
 import "@/agent/tools/all";
 
 export const runtime = "nodejs";
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
   if (!originAllowed(req)) return blockedOrigin();
   const session = await auth();
   const userId = session?.user?.email ? await userIdForEmail(session.user.email) : null;
+  setSentryUser(userId);
   const limited = await checkRate(req, "chat", userId);
   if (limited) return limited;
 
@@ -159,6 +161,7 @@ export async function POST(req: NextRequest) {
             return;
           }
           console.error("Agent loop error", e);
+          captureVoxError(e, { route: "/api/chat", mode: "interview" });
           send("error", { message: "The interviewer hit a problem. Please try again." });
           finish();
           return;

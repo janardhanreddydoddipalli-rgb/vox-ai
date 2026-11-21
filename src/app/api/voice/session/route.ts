@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { GEMINI_LIVE_MODEL } from "@/lib/config";
+import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { functionDeclarations } from "@/agent/loop";
 
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
 
   const limit = await checkRate(req, "chat", session.user.email);
   if (limit) return limit;
+  setSentryUser(session.user.id ?? undefined);
 
   const key = process.env.GEMINI_API_KEY?.trim();
   if (!key) {
@@ -63,6 +65,7 @@ export async function POST(req: NextRequest) {
   });
   if (!res.ok) {
     console.error("ephemeral token mint failed", res.status, await res.text().catch(() => ""));
+    captureVoxError(new Error(`Ephemeral token mint failed: ${res.status}`), { route: "/api/voice/session" });
     return NextResponse.json({ error: "Could not start live voice" }, { status: 502 });
   }
   const data = await res.json();

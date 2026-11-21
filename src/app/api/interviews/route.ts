@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
+import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { upsertUserByEmail, saveResume, createInterview } from "@/lib/db";
 import { db } from "@/lib/db/client";
 import { interviews } from "@/lib/db/schema";
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest) {
   if (!email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = await upsertUserByEmail(email);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(user.id);
 
   const limit = await checkRate(req, "interviews", user.id);
   if (limit) return limit;
@@ -69,6 +71,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error("resume parse failed", err);
+      captureVoxError(err, { route: "/api/interviews", stage: "resume-parse" });
       return NextResponse.json({ error: "Could not parse that PDF. Try another file or skip the resume." }, { status: 400 });
     }
   }

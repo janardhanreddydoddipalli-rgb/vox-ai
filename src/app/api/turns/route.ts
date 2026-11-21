@@ -11,6 +11,7 @@ import {
 } from "@/lib/db";
 import { turnsSchema, firstIssueMessage } from "@/lib/schemas";
 import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
+import { setSentryUser } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
   const session = await auth();
   const userId = session?.user?.email ? await userIdForEmail(session.user.email) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(userId);
 
   const limited = await checkRate(req, "turns", userId);
   if (limited) return limited;
@@ -53,6 +55,7 @@ export async function GET(req: NextRequest) {
   const session = await auth();
   const userId = session?.user?.email ? await userIdForEmail(session.user.email) : null;
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  setSentryUser(userId);
 
   const owned = await sessionIdsForUser(userId);
   const url = new URL(req.url);
