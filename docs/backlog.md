@@ -7,7 +7,7 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 - **Upgrade to Next 16.** This fixes the bundled `postcss` advisory (`next@15.5.29` bundles `postcss@8.4.31`; `npm audit` reports it as high). It isn't reachable in production, because PostCSS only runs at build time on our own CSS. Also align `eslint-config-next` (currently 16.x) with `next`. Do it as a separate PR with a full regression pass (lint, typecheck, unit, E2E smoke, build, and a manual voice check).
 - **`drizzle-kit` advisories** (`esbuild` dev-server issue via `@esbuild-kit/*`): dev-only and never in production. They go away when Drizzle is removed in M4. Don't take `npm audit fix --force`, which would *downgrade* drizzle-kit to 0.18.
 
-- **Terms page.** The landing-page footer links to `/terms`, which doesn't exist (404). Write a Terms of Service page or remove the link. Legal text is a product decision, so it wasn't invented in M1. (`/terms` was removed from the sitemap in M1.)
+- **Terms page (Phase 13, launch).** The footer link to `/terms` was removed because the page didn't exist (decision 2026-11-22). Add a Terms of Service page and restore the link at launch; `tests/internal-links.test.ts` will fail if the link returns before the page does.
 
 - **Web: `upsertUserByEmail` blanks names.** On conflict it sets `name`/`image` to the passed values, and most callers pass only the email, so the stored name and image become NULL on every such request. Fix: keep stored values when none are passed (as `services/api` does), or retire it in M3 when user writes move to the API.
 

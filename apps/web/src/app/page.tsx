@@ -103,7 +103,6 @@ export default function Landing() {
         <span>© 2026 Vox</span>
         <nav aria-label="Footer">
           <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
           <a href="https://code.ml.ai" rel="noopener">Built with ML AI Code</a>
         </nav>
       </footer>
