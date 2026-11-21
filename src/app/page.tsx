@@ -50,7 +50,7 @@ export default function Home() {
     fetch("/api/turns", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: sid.current, mode: mode ?? "browser", turns: all.slice(saved.current) }),
+      body: JSON.stringify({ sessionId: sid.current, mode: modeRef.current ?? "browser", turns: all.slice(saved.current) }),
     })
       .then(() => (saved.current = all.length))
       .catch(() => {});
@@ -58,10 +58,35 @@ export default function Home() {
 
   // keep a ref so flush sees latest turns without re-binding
   const turnsRef = useRef(turns);
+  const partialRef = useRef(partial);
+  const modeRef = useRef(mode);
   useEffect(() => {
     turnsRef.current = turns;
+    partialRef.current = partial;
+    modeRef.current = mode;
     if (turns.length >= 2 && turns.length % 2 === 0) flush();
-  }, [turns, flush]);
+  }, [turns, partial, mode, flush]);
+
+  // Page closing: flush unsaved turns (including a partial in-flight turn)
+  // via sendBeacon, which survives unload where fetch may not.
+  useEffect(() => {
+    const onPageHide = () => {
+      const all = [...turnsRef.current];
+      const partialText = partialRef.current.trim();
+      if (partialText) all.push({ role: "user", text: partialText });
+      const unsaved = all.slice(saved.current);
+      if (unsaved.length === 0) return;
+      const payload = JSON.stringify({
+        sessionId: sid.current,
+        mode: modeRef.current ?? "browser",
+        turns: unsaved,
+      });
+      navigator.sendBeacon?.("/api/turns", new Blob([payload], { type: "application/json" }));
+      saved.current = all.length;
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
 
   const start = async () => {
     setError("");
