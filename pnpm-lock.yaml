@@ -22,6 +22,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.4
         version: 0.45.4(@opentelemetry/api@1.10.0)(@upstash/redis@1.41.0)(postgres@4.1.1)
+      jose:
+        specifier: ^6.2.18
+        version: 6.2.18
       langfuse:
         specifier: ^3.39.2
         version: 3.39.2

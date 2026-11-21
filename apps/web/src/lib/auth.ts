@@ -1,6 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
+import { upsertUserViaApi, upsertViaApiEnabled } from "./api-internal";
 
 const e2eEnabled = process.env.E2E_TEST_AUTH === "1";
 
@@ -36,6 +37,15 @@ export const authConfig: NextAuthConfig = {
         token.email = user.email;
         token.name = token.name ?? user.name ?? profile?.name ?? null;
         token.picture = token.picture ?? user.image ?? profile?.picture ?? null;
+        // M2 (off by default): resolve the stable user id through services/api
+        // at sign-in. Non-fatal while the web app still owns its own DB access.
+        if (upsertViaApiEnabled()) {
+          try {
+            token.userId = await upsertUserViaApi({ email: user.email, name: token.name, image: token.picture });
+          } catch (err) {
+            console.error("[auth] user upsert via API failed:", err instanceof Error ? err.message : "unknown");
+          }
+        }
       }
       return token;
     },

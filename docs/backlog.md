@@ -9,6 +9,8 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Terms page.** The landing-page footer links to `/terms`, which doesn't exist (404). Write a Terms of Service page or remove the link. Legal text is a product decision, so it wasn't invented in M1. (`/terms` was removed from the sitemap in M1.)
 
+- **Web: `upsertUserByEmail` blanks names.** On conflict it sets `name`/`image` to the passed values, and most callers pass only the email, so the stored name and image become NULL on every such request. Fix: keep stored values when none are passed (as `services/api` does), or retire it in M3 when user writes move to the API.
+
 ## M3
 
 - Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).
