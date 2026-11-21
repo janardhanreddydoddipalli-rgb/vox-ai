@@ -61,6 +61,7 @@ export type ReportJson = {
   strengths: string[];
   gaps: string[];
   summary: string;
+  perQuestion?: { question: string; score: number; better_answer: string }[];
 };
 
 // One asked question with the candidate's answer and its evaluation.
