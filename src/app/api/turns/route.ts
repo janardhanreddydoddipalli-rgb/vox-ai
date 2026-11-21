@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureSession, addTurn, getTurns, listSessions } from "@/lib/db";
+import { turnsSchema, firstIssueMessage } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  if (!body || typeof body.sessionId !== "string" || !Array.isArray(body.turns)) {
-    return NextResponse.json({ error: "sessionId and turns required" }, { status: 400 });
+  const parsed = turnsSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: firstIssueMessage(parsed.error) }, { status: 400 });
   }
-  const mode = body.mode === "gemini" ? "gemini" : "browser";
-  ensureSession(body.sessionId, mode);
-  for (const t of body.turns) {
-    if (t && (t.role === "user" || t.role === "assistant") && typeof t.text === "string" && t.text.trim()) {
-      addTurn(body.sessionId, t.role, t.text.trim().slice(0, 5000), Number.isFinite(t.latencyMs) ? t.latencyMs : undefined);
-    }
+  const { sessionId, mode, turns } = parsed.data;
+  ensureSession(sessionId, mode);
+  for (const t of turns) {
+    addTurn(sessionId, t.role, t.text, t.latencyMs);
   }
-  return NextResponse.json({ ok: true, turns: getTurns(body.sessionId) });
+  return NextResponse.json({ ok: true, turns: getTurns(sessionId) });
 }
 
 export async function GET() {

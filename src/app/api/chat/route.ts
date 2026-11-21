@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GEMINI_MODEL, CHAT_CONTEXT_TURNS } from "@/lib/config";
+import { chatSchema, firstIssueMessage } from "@/lib/schemas";
 
 export const runtime = "nodejs";
 
@@ -22,14 +23,12 @@ export async function GET() {
 // (Vault), otherwise falls back to deterministic local responses.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
-  const userText = typeof body?.userText === "string" ? body.userText.trim() : "";
-  if (!userText) return NextResponse.json({ reply: "I didn't catch that." }, { status: 400 });
-
-  const history: HistoryTurn[] = Array.isArray(body?.history)
-    ? body.history
-        .filter((t: any) => t && (t.role === "user" || t.role === "assistant") && typeof t.text === "string")
-        .slice(-CHAT_CONTEXT_TURNS)
-    : [];
+  const parsed = chatSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: firstIssueMessage(parsed.error) }, { status: 400 });
+  }
+  const userText = parsed.data.userText;
+  const history: HistoryTurn[] = parsed.data.history;
 
   const key = process.env.GEMINI_API_KEY;
   if (key) {
