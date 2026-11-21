@@ -15,6 +15,20 @@
       "when": 1795257937533,
       "tag": "0001_flaky_red_ghost",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1795258112420,
+      "tag": "0002_fair_vulture",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1795258121886,
+      "tag": "0003_cloudy_songbird",
+      "breakpoints": true
     }
   ]
 }

@@ -1,9 +1,9 @@
 // Repository layer: the only place that touches the database. Route handlers
 // call these functions; they never write SQL or Drizzle queries directly.
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { db, schema } from "./client";
 
-const { users, sessions, turns } = schema;
+const { users, sessions, turns, interviews, questions, agentSteps } = schema;
 
 export type Mode = "gemini" | "browser";
 export type TurnRow = {
@@ -119,6 +119,61 @@ export async function sessionOwnedBy(sessionId: string, userId: string) {
     .where(and(eq(sessions.id, sessionId), eq(sessions.userId, userId)))
     .limit(1);
   return row != null;
+}
+
+// --- interviews ----------------------------------------------------------
+export type InterviewRow = typeof interviews.$inferSelect;
+
+export async function createInterview(userId: string, role: string, level: string) {
+  const [row] = await db.insert(interviews).values({ userId, role, level }).returning();
+  return row;
+}
+
+export async function getInterview(id: string, userId: string) {
+  const [row] = await db
+    .select()
+    .from(interviews)
+    .where(and(eq(interviews.id, id), eq(interviews.userId, userId)))
+    .limit(1);
+  return row ?? null;
+}
+
+export async function setInterviewStatus(id: string, status: "active" | "complete") {
+  const [row] = await db.update(interviews).set({ status }).where(eq(interviews.id, id)).returning();
+  return row ?? null;
+}
+
+export async function bumpInterviewQuestion(id: string, by = 1) {
+  const [row] = await db
+    .update(interviews)
+    .set({ currentQuestionIndex: sql`${interviews.currentQuestionIndex} + ${by}` })
+    .where(eq(interviews.id, id))
+    .returning();
+  return row ?? null;
+}
+
+// --- question bank ---------------------------------------------------------
+export async function listQuestions() {
+  return db.select().from(questions).orderBy(questions.id);
+}
+
+// --- agent tracing ---------------------------------------------------------
+export type AgentStepInsert = {
+  interviewId: string;
+  stepIndex: number;
+  toolName: string;
+  input: unknown;
+  output: unknown;
+  durationMs: number;
+};
+
+export async function addAgentStep(step: AgentStepInsert) {
+  const [row] = await db.insert(agentSteps).values(step).returning();
+  return row;
+}
+
+export async function getAgentSteps(interviewId: string) {
+  return db.select().from(agentSteps).where(eq(agentSteps.interviewId, interviewId)).orderBy(agentSteps.createdAt, agentSteps.id);
 }
 
 // --- deletion (privacy) --------------------------------------------------
