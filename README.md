@@ -1,15 +1,61 @@
 # Vox — voice assistant
 
 A browser voice bot: you talk into your microphone, it transcribes live, replies out loud
-with **Gemini Flash**, and saves every turn to SQLite.
+with **Gemini Flash**, and saves every turn to **Postgres**.
 
 Speech capture and playback use the browser's built-in Web Speech API (Chrome, Edge and
 Android Chrome). The reply text is generated server-side by Google's Gemini API, so no
 speech-to-text or text-to-speech key is needed — only a Gemini API key for the answers.
 
+## Stack
+
+- **Next.js (App Router)** — UI and API routes
+- **Postgres (Neon in production) + Drizzle ORM** — data, with generated migrations in `/drizzle`
+- **Auth.js v5** — Google OAuth + email magic link (Resend); every history query is scoped to the signed-in user
+- **Upstash Ratelimit** — per-user (per-IP for anonymous) rate limiting; in-memory fallback for local dev
+- **Vitest** — API tests against a dedicated test database
+
+## Environment: staging vs production
+
+All secrets live in the hosting platform's env settings (Vercel Project Settings →
+Environment Variables), never in the repo. `.env.example` documents every variable with
+safe placeholders; copy it to `.env.local` for local dev (git-ignored).
+
+| Variable | Local dev (.env.local) | Staging | Production |
+|---|---|---|---|
+| `DATABASE_URL` | local Postgres, e.g. `postgres://ubuntu:ubuntu@localhost:5432/voicebot` | Neon **pooled** URL (staging branch) | Neon **pooled** URL (production branch) |
+| `DATABASE_URL_UNPOOLED` | not needed | Neon direct URL, used by `drizzle-kit migrate` | same, production branch |
+| `TEST_DATABASE_URL` | `postgres://ubuntu:ubuntu@localhost:5432/voicebot_test` | — (tests run locally/CI only) | — |
+| `AUTH_SECRET` | any random string | distinct secret per environment | strong secret (`openssl rand -base64 32`) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | optional | OAuth client with staging redirect URIs | OAuth client with production redirect URIs |
+| `RESEND_API_KEY` / `EMAIL_FROM` | optional | Resend staging key | Resend production key |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | optional (in-memory fallback) | staging Upstash DB | production Upstash DB |
+| `GEMINI_API_KEY` | required for real replies | staging key (quota-limited) | production key |
+| `GEMINI_MODEL` / `CHAT_CONTEXT_TURNS` | optional | optional | optional (defaults: `gemini-3.5-flash`, 8) |
+
+Rules:
+- Never commit real values. `.env.local` is git-ignored; `.env.example` holds names + placeholders only.
+- Staging and production use separate databases and separate OAuth/Resend/Upstash credentials.
+- Migrations run with `DATABASE_URL=<unpooled url> npx drizzle-kit migrate` (drizzle-kit reads `DATABASE_URL` from the environment).
+
+## Database
+
+Schema lives in `src/lib/db/schema.ts` (Drizzle). Migrations are generated into `/drizzle`:
+
+```bash
+DATABASE_URL=postgres://... npx drizzle-kit generate   # after editing schema.ts
+DATABASE_URL=postgres://... npx drizzle-kit migrate    # apply
+```
+
+Route handlers never write SQL — all access goes through the repository layer in
+`src/lib/db/repository.ts`, which enforces per-user scoping on every read and delete.
+Tests point `DATABASE_URL`/`TEST_DATABASE_URL` at a dedicated test database and refuse
+to run against anything else (see `src/lib/db/client.ts`).
+
 ## Requirements
 
 - Node.js 18+ (built and tested on Node 24)
+- Postgres (local or Neon)
 - A microphone and speakers, in a browser with the Web Speech API
 - A Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
@@ -17,12 +63,16 @@ speech-to-text or text-to-speech key is needed — only a Gemini API key for the
 
 ```bash
 npm install
+cp .env.example .env.local   # fill in DATABASE_URL, AUTH_SECRET, GEMINI_API_KEY
+npx drizzle-kit migrate
 npm run build
 npm start
 ```
 
 Open http://localhost:3000, tap **Start talking**, allow the microphone, and speak.
-Your transcript appears live; the reply is spoken aloud.
+Your transcript appears live; the reply is spoken aloud. Sign in (Google or email magic
+link) to keep history across visits; **History → Delete my data** wipes your account,
+sessions and turns.
 
 For development with hot reload:
 
@@ -30,86 +80,13 @@ For development with hot reload:
 npm run dev
 ```
 
-## Configuration
-
-| Variable         | Required | Purpose                                                        |
-| ---------------- | -------- | -------------------------------------------------------------- |
-| `GEMINI_API_KEY` | No       | Enables Gemini replies. Without it the bot uses simple local fallback answers. |
-
-Create `.env.local` in the project root (this file is gitignored):
-
-```
-GEMINI_API_KEY=your-key-here
-```
-
-Next.js loads `.env*` files into `process.env` automatically for Route Handlers; the key
-is server-only because it has no `NEXT_PUBLIC_` prefix. The model is set as `MODEL` in
-`src/app/api/chat/route.ts` (currently `gemini-3.5-flash`).
-
-## API reference
-
-### `GET /api/chat`
-
-Reports which brain is live.
-
-```json
-{"engine":"gemini","model":"gemini-3.5-flash"}
-```
-
-`engine` is `"gemini"` when `GEMINI_API_KEY` is set, `"browser"` otherwise.
-
-### `POST /api/chat`
-
-Generates the spoken reply.
+## Checks
 
 ```bash
-curl -s -X POST http://localhost:3000/api/chat \
-  -H 'Content-Type: application/json' \
-  -d '{"userText":"What is the capital of Australia?"}'
+npm run lint        # ESLint (eslint-config-next, flat config)
+npx tsc --noEmit    # typecheck
+npx vitest run      # API tests against the test database (requires local Postgres)
+npm run build       # production build
 ```
 
-```json
-{"reply":"The capital of Australia is Canberra.","engine":"gemini"}
-```
-
-Request body:
-
-| Field     | Type                          | Notes                                          |
-| --------- | ----------------------------- | ---------------------------------------------- |
-| `userText`  | string                      | Required. What the user said.                  |
-| `history`   | `{role, text}[]` (optional) | Last turns for context; only the final 8 are used. |
-
-### `POST /api/turns`
-
-Persists a session's turns to SQLite (`data/voicebot.db`). Requires `sessionId` and
-`turns`; `mode` labels the engine used (`"gemini"` or `"browser"`).
-
-### `GET /api/turns`
-
-Lists past sessions with their turns and per-turn latency.
-
-## How it works
-
-- `src/lib/voice-engine.ts` — runs in the browser: microphone capture, live mic level,
-  SpeechRecognition for transcription, speechSynthesis for playback, and the fetch to
-  `/api/chat` with conversation history.
-- `src/app/api/chat/route.ts` — server route that calls
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent`
-  with a spoken-style system instruction, and answers with short sentences.
-- `src/lib/db.ts` — SQLite (better-sqlite3) schema and queries for sessions and turns.
-
-## Troubleshooting
-
-| Symptom | Cause and fix |
-| --- | --- |
-| "This browser has no Web Speech API" | Use Chrome or Edge. Firefox and Safari desktop do not ship SpeechRecognition. |
-| Replies start with "I'm running without a Gemini key" | `GEMINI_API_KEY` is not set in `.env.local`, or the server was started before you added it. Restart `npm start` after editing `.env.local`. |
-| `Could not find a production build` from `npm start` | Run `npm run build` first. |
-| Gemini replies stop and fall back | Check the server log for a `Gemini generateContent failed` line with the HTTP status; free-tier rate limits and busy-model responses are logged there. |
-| Microphone blocked | Browsers only grant mic access on `localhost` or HTTPS. |
-
-## Verified with
-
-- `npm run build` and `npx tsc --noEmit` pass.
-- `curl http://localhost:3000/api/chat` returns `{"engine":"gemini","model":"gemini-3.5-flash"}`.
-- A live POST with the body above returned a real Gemini reply ("The capital of Australia is Canberra.").
+CI (`.github/workflows/ci.yml`) runs lint → typecheck → test → build on every push and PR.
