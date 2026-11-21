@@ -51,7 +51,7 @@ const evaluateInput = z.object({
   answer_text: z.string().min(1).max(4000),
 });
 
-const evaluationSchema = z.object({
+export const evaluationSchema = z.object({
   score: z.number().int().min(1).max(10),
   clarity: z.string(),
   depth: z.string(),

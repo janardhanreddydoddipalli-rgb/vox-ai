@@ -25,6 +25,6 @@ await migrator.end();
 // Per-test cleanup: wipe all rows between tests.
 export async function resetDb() {
   const sql = postgres(TEST_URL, { max: 1 });
-  await sql`TRUNCATE turns, sessions, users CASCADE`;
+  await sql`TRUNCATE agent_steps, interviews, turns, sessions, users, questions CASCADE`;
   await sql.end();
 }
