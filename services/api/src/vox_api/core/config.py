@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     # Service credential for /internal/* (sent by apps/web as X-Internal-Token).
     internal_api_token: SecretStr = Field(min_length=32)
 
+    # Gemini (unset: model features degrade the same way apps/web's do).
+    gemini_api_key: SecretStr | None = None
+    gemini_model: str = "gemini-3.5-flash"
+    gemini_embedding_model: str = "gemini-embedding-001"
+
+    # Cost guard: per-user daily token budget across every paid model call (0 = off).
+    daily_token_budget: int = Field(default=200_000, ge=0)
+
     # Shared rate limiting (same Upstash database as apps/web). Unset: in-memory.
     upstash_redis_rest_url: str | None = None
     upstash_redis_rest_token: SecretStr | None = None

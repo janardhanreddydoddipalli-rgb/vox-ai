@@ -11,6 +11,8 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 - **Playground text mode.** When the mic or speech engine fails with a generic error, the playground shows "Could not start" instead of falling back to text mode (only `NotAllowedError`/`NotFoundError` trigger it), so browsers without speech support can't chat there.
 
+- **Report PDFs in Hindi, Tamil and Telugu are unreadable.** The PDF writer (web and its API port) uses only the built-in Helvetica fonts and replaces non-ASCII characters with `?`. Fix: embed a Noto font for each script (e.g. via reportlab with TTF fonts) in `services/api/src/vox_api/services/report_pdf.py`.
+
 ## M3
 
 - Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).

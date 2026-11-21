@@ -1,5 +1,6 @@
 import { auth } from "@/lib/auth";
-import { upsertUserByEmail, getInterview, listInterviewQa } from "@/lib/db";
+import { upsertUserByEmail } from "@/lib/db";
+import { loadReportView } from "@/lib/interviews";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -13,8 +14,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   const user = await upsertUserByEmail(session.user.email);
   if (!user) redirect("/signin");
 
-  const iv = await getInterview(id, user.id);
-  if (!iv) {
+  const view = await loadReportView(user.id, id);
+  if (!view) {
     return (
       <main className="report-page">
         <div className="card state-card">
@@ -26,7 +27,8 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  if (iv.status !== "complete") {
+  const { iv, qa } = view;
+  if (iv.status !== "complete" || !iv.report) {
     return (
       <main className="report-page">
         <div className="card state-card">
@@ -39,7 +41,6 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   }
 
   const report = iv.report;
-  const qa = await listInterviewQa(id);
   const h = await headers();
   const scheme = h.get("x-forwarded-proto") ?? "http";
   const host = h.get("host") ?? "localhost:3000";

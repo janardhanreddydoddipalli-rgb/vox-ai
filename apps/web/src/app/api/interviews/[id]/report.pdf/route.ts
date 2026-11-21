@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { upsertUserByEmail, getInterview, listInterviewQa } from "@/lib/db";
+import { routeTarget } from "@/lib/route-flags";
+import { reportPdfViaApi } from "@/lib/interviews";
 
 // Minimal, dependency-free PDF writer: one page per chunk of report content
 // using only core PDF text operators. Text is Latin-1 sanitized.
@@ -100,6 +102,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  if (routeTarget("INTERVIEWS") === "fastapi") return reportPdfViaApi(user.id, id);
   const iv = await getInterview(id, user.id);
   if (!iv || !iv.report) return NextResponse.json({ error: "Report not found" }, { status: 404 });
   const qa = await listInterviewQa(id);

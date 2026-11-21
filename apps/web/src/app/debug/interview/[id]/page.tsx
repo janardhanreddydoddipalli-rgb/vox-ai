@@ -1,8 +1,8 @@
 // Dev-only trace viewer: the step timeline for one interview. Server
 // component; renders in dev only, scoped to the signed-in user.
 import { auth } from "@/lib/auth";
-import { getAgentSteps } from "@/lib/db/repository";
-import { loadInterview } from "@/agent/state";
+import { upsertUserByEmail } from "@/lib/db";
+import { loadAgentSteps } from "@/lib/interviews";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -14,18 +14,18 @@ export default async function DebugInterviewPage({ params }: { params: Promise<{
   const { id } = await params;
   const session = await auth();
   if (!session?.user?.email) redirect("/signin");
-  const interview = await loadInterview(id, session.user.id!);
-  if (!interview) {
+  // users.id, not session.user.id (that is the OAuth account id and never matched).
+  const user = await upsertUserByEmail(session.user.email);
+  const steps = user ? await loadAgentSteps(user.id, id) : null;
+  if (!steps) {
     return <p style={{ padding: 24 }}>No interview with that id for your account.</p>;
   }
-  const steps = await getAgentSteps(id);
 
   return (
     <main style={{ maxWidth: 860, margin: "0 auto", padding: 24, fontFamily: "var(--font-mono, monospace)" }}>
       <h1 style={{ fontSize: 20 }}>Interview trace</h1>
       <p>
-        {interview.id} — role: {interview.role} · level: {interview.level} · status: {interview.status} · question #
-        {interview.currentQuestionIndex}
+        {id} — {steps.length} tool step{steps.length === 1 ? "" : "s"}
       </p>
       {steps.length === 0 ? (
         <p>No tool steps recorded yet.</p>
