@@ -9,7 +9,7 @@ export default defineConfig({
     viewport: { width: 390, height: 844 },
   },
   webServer: {
-    command: "npx next dev -p 3010",
+    command: "pnpm exec next dev -p 3010",
     url: "http://127.0.0.1:3010/api/health",
     reuseExistingServer: false,
     timeout: 120_000,
