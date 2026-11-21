@@ -1,20 +1,17 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
-import Resend from "next-auth/providers/resend";
 import Credentials from "next-auth/providers/credentials";
 
 const e2eEnabled = process.env.E2E_TEST_AUTH === "1";
 
-// Auth.js v5. Google OAuth + email magic link (Resend). Credentials come from
-// env (Vercel env settings in prod); providers activate when configured.
+// Auth.js v5, Google OAuth only (docs/adr/0002-google-only-auth.md): email
+// magic links need a database adapter in the web app, which the architecture
+// forbids. Credentials come from env (Vercel env settings in prod).
 // E2E_TEST_AUTH=1 adds a credentials provider used only by the Playwright run.
 export const authConfig: NextAuthConfig = {
   providers: [
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? [Google({ clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET })]
-      : []),
-    ...(process.env.RESEND_API_KEY
-      ? [Resend({ from: process.env.EMAIL_FROM ?? "Vox <onboarding@resend.dev>" })]
       : []),
     ...(e2eEnabled
       ? [
