@@ -11,6 +11,8 @@ import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 import { upsertUserByEmail } from "@/lib/db";
 import { getTool, type ToolContext } from "@/agent/tools";
 import { addAgentStep } from "@/lib/db/repository";
+import { setSentryUser, captureVoxError } from "@/lib/observability";
+import { startToolSpan } from "@/lib/tracing";
 import "@/agent/tools/all";
 
 export const runtime = "nodejs";
@@ -35,6 +37,7 @@ export async function POST(req: NextRequest) {
 
   const user = await upsertUserByEmail(session.user.email);
   const ctx: ToolContext = { userId: user?.id ?? null, interviewId };
+  setSentryUser(user?.id);
 
   const tool = getTool(name);
   if (!tool) {
@@ -52,8 +55,10 @@ export async function POST(req: NextRequest) {
   }
 
   const startedAt = Date.now();
+  const span = startToolSpan({ userId: user?.id ?? "", interviewId: interviewId ?? "", name });
   try {
     const output = await tool.handler(valid.data, ctx);
+    span?.end({ ok: true });
     if (interviewId && ctx.userId) {
       try {
         await addAgentStep({
@@ -70,8 +75,10 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ ok: true, result: output ?? { ok: true } });
   } catch (e: any) {
+    span?.end({ ok: false, error: e?.message ?? "tool failed" });
     const message = e?.message ?? "tool failed";
     console.error("live tool call failed:", name, message);
+    captureVoxError(e, { route: "/api/voice/tool", tool: name });
     return NextResponse.json({ ok: false, error: message });
   }
 }

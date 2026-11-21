@@ -10,6 +10,8 @@ import { INTERVIEWER_SYSTEM_PROMPT } from "@/agent/prompt";
 import { languageDirective } from "@/lib/languages";
 import { startInterview, loadInterview } from "@/agent/state";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
+import { startTurnTrace } from "@/lib/tracing";
+import type { LoopResult } from "@/agent/loop";
 import "@/agent/tools/all";
 
 export const runtime = "nodejs";
@@ -135,23 +137,39 @@ export async function POST(req: NextRequest) {
         });
         try {
           const loopHistory: LoopMessage[] = history.map((t) => ({ role: t.role === "assistant" ? "model" : "user", text: t.text }));
-          const result = await runAgentLoop(
-            userText,
-            loopHistory,
-            systemPrompt,
-            {
-              onToken: (t) => send("token", { text: t }),
-              onSentence: (s) => send("sentence", { text: s }),
-            },
-            { userId, interviewId: interview.id },
-            upstream.signal,
-          );
+          const trace = startTurnTrace({ userId, interviewId: interview.id, sessionId: interview.id, provider: "text-gemini" });
+          let result: LoopResult;
+          try {
+            result = await runAgentLoop(
+              userText,
+              loopHistory,
+              systemPrompt,
+              {
+                onToken: (t) => send("token", { text: t }),
+                onSentence: (s) => send("sentence", { text: s }),
+              },
+              { userId, interviewId: interview.id },
+              upstream.signal,
+            );
+          } catch (loopErr) {
+            trace.fail(loopErr);
+            throw loopErr;
+          }
+          await trace.finish({
+            tokensIn: result.tokensIn,
+            tokensOut: result.tokensOut,
+            latencyMs: result.llmMs,
+            toolSteps: result.steps,
+            hitStepLimit: result.hitStepLimit,
+          });
           for (const step of result.steps) send("tool", { name: step.toolName, step: step.stepIndex, duration_ms: step.durationMs });
           send("done", {
             total_llm_ms: Date.now() - startedAt,
             interview_id: interview.id,
             tool_steps: result.steps.length,
             hit_step_limit: result.hitStepLimit,
+            tokens_in: result.tokensIn,
+            tokens_out: result.tokensOut,
           });
           finish();
           return;

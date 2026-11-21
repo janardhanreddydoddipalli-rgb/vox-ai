@@ -30,6 +30,9 @@ export type LoopResult = {
   reply: string;
   steps: AgentStep[];
   hitStepLimit: boolean;
+  tokensIn: number;
+  tokensOut: number;
+  llmMs: number;
 };
 
 // Gemini FunctionDeclarations built from the registry (name, description,
@@ -104,6 +107,9 @@ export async function runAgentLoop(
 
   const steps: AgentStep[] = [];
   let hitStepLimit = false;
+  let tokensIn = 0;
+  let tokensOut = 0;
+  const loopStartedAt = Date.now();
   const contents: { role: "user" | "model"; parts: GeminiPart[] }[] = history.map((m) => ({
     role: m.role === "model" ? "model" : "user",
     parts: [m.text != null ? { text: m.text } : { functionResponse: { name: m.toolName ?? "tool", response: m.toolJson as object } }],
@@ -128,6 +134,9 @@ export async function runAgentLoop(
     if (!res.ok) throw new Error(`Gemini generateContent failed: ${res.status}`);
 
     const data = await res.json();
+    // Gemini reports cumulative usage per request — sum across rounds.
+    tokensIn += data.usageMetadata?.promptTokenCount ?? 0;
+    tokensOut += data.usageMetadata?.candidatesTokenCount ?? 0;
     const candidate = data.candidates?.[0];
     const parts: GeminiPart[] = candidate?.content?.parts ?? [];
 
@@ -136,7 +145,7 @@ export async function runAgentLoop(
       // No tool call: this text is the final reply.
       const reply = parts.map((p) => p.text ?? "").join("").trim();
       if (reply) streamReply(reply, callbacks);
-      return { reply, steps, hitStepLimit };
+      return { reply, steps, hitStepLimit, tokensIn, tokensOut, llmMs: Date.now() - loopStartedAt };
     }
 
     // Execute each tool call, trace it, and feed responses back to the model.
@@ -194,12 +203,15 @@ export async function runAgentLoop(
   if (!res.ok) throw new Error(`Gemini forced-reply stream failed: ${res.status}`);
 
   let reply = "";
-  for await (const text of sseTextStream(res)) {
+  const usage = { in: 0, out: 0 };
+  for await (const text of sseTextStream(res, usage)) {
     reply += text;
     callbacks.onToken?.(text);
     callbacks.onSentence?.(text);
   }
-  return { reply: reply.trim(), steps, hitStepLimit };
+  tokensIn += usage.in;
+  tokensOut += usage.out;
+  return { reply: reply.trim(), steps, hitStepLimit, tokensIn, tokensOut, llmMs: Date.now() - loopStartedAt };
 }
 
 // Split a reply into sentence-sized chunks and emit each through the callbacks
@@ -213,7 +225,8 @@ function streamReply(reply: string, callbacks: LoopCallbacks) {
 }
 
 // Minimal SSE reader for Gemini's streamGenerateContent?alt=sse format.
-async function* sseTextStream(res: Response): AsyncGenerator<string> {
+// Usage metadata from the final chunk lands in `usage` (opt-in accumulator).
+async function* sseTextStream(res: Response, usage?: { in: number; out: number }): AsyncGenerator<string> {
   if (!res.body) return;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -230,6 +243,10 @@ async function* sseTextStream(res: Response): AsyncGenerator<string> {
       if (!payload || payload === "[DONE]") continue;
       try {
         const json = JSON.parse(payload);
+        if (usage && json.usageMetadata) {
+          usage.in = json.usageMetadata.promptTokenCount ?? usage.in;
+          usage.out = json.usageMetadata.candidatesTokenCount ?? usage.out;
+        }
         const parts: GeminiPart[] = json.candidates?.[0]?.content?.parts ?? [];
         for (const p of parts) if (p.text) yield p.text;
       } catch {
