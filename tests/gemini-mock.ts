@@ -1,23 +1,23 @@
 // Mocks global fetch so the routes never call the real Gemini API.
-const mocks: { url: string; body: any }[] = [];
+const mocks: { url: string; body: unknown }[] = [];
 
-// @ts-expect-error augmenting for tests
-globalThis.__geminiMocks = mocks;
-
-export function mockGeminiOk(reply = "Test reply") {
-  globalThis.fetch = (async (url: any, init: any) => {
-    mocks.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : null });
+export function mockGeminiOk(reply = "Test reply"): void {
+  const mocked: typeof fetch = async (url, init) => {
+    const body = typeof init?.body === "string" ? (JSON.parse(init.body) as unknown) : null;
+    mocks.push({ url: String(url), body });
     return new Response(
       JSON.stringify({ candidates: [{ content: { parts: [{ text: reply }] } }] }),
       { status: 200 },
     );
-  }) as any;
+  };
+  globalThis.fetch = mocked;
 }
 
-export function mockGeminiFailure(status = 500) {
-  globalThis.fetch = (async () => new Response("upstream error", { status })) as any;
+export function mockGeminiFailure(status = 500): void {
+  const mocked: typeof fetch = async () => new Response("upstream error", { status });
+  globalThis.fetch = mocked;
 }
 
-export function recordedCalls() {
+export function recordedCalls(): readonly { url: string; body: unknown }[] {
   return mocks;
 }
