@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GEMINI_MODEL, CHAT_CONTEXT_TURNS } from "@/lib/config";
 import { chatSchema, firstIssueMessage } from "@/lib/schemas";
+import { checkRate, originAllowed, blockedOrigin } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,6 +23,10 @@ export async function GET() {
 // POST generates the spoken reply. Uses Gemini Flash when GEMINI_API_KEY is set
 // (Vault), otherwise falls back to deterministic local responses.
 export async function POST(req: NextRequest) {
+  if (!originAllowed(req)) return blockedOrigin();
+  const limited = checkRate(req, "chat");
+  if (limited) return limited;
+
   const body = await req.json().catch(() => null);
   const parsed = chatSchema.safeParse(body);
   if (!parsed.success) {
