@@ -8,3 +8,11 @@ node_modules/
 # Added by ML AI Code: build output and caches
 test-results/
 playwright-report/
+
+# Python (services/api)
+.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
