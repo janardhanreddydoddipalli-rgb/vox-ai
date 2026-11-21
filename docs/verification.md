@@ -8,7 +8,21 @@ What has been verified, how, and what is still open. Each entry is marked **VERI
 |---|---|---|---|---|
 | Q1 | Does Gemini Live's `usageMetadata` report **per turn** or a **running total** for the session? | `live-voice.ts` forwards each frame to `/api/voice/usage`, which **adds** it to the daily ledger. If it's a running total, usage is over-counted. | M3, against a real Live session with the exact model in use (log a few frames and compare against the prompt and response sizes) | NOT TESTED |
 | Q2 | Can ephemeral tokens lock the model, system instruction and tools for our Live model (`liveConnectConstraints`)? | Today the browser sends the setup frame, so it could change the prompt or tools. If tokens can't lock them, the fallback is a server-side WebSocket relay (needs its own ADR). | M3, when the voice route moves | NOT TESTED |
-| Q3 | Does `gemini-embedding-001` return 768 dimensions with `outputDimensionality: 768`, and does recall work end to end? | Before `23708e3`, every embedding call failed the dimension check, so memory and RAG never worked. | Next session with a real key: one `embedTexts` call, then one interview with memory recall | NOT TESTED (mocked test only) |
+| Q3 | Does `gemini-embedding-001` return 768 dimensions with `outputDimensionality: 768`, and does recall work end to end? | Before `23708e3`, every embedding call failed the dimension check, so memory and RAG never worked. | 2026-11-21, real API (see below) | **VERIFIED** for embeddings. End-to-end recall inside an interview: NOT TESTED (Gemini quota, Q4) |
+| Q4 | Which Gemini tier does **production** use? | The dev key is on the **free tier: 20 `generateContent` requests per day per model** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`; `gemini-3.5-flash` counts against `gemini-3.6-flash`). One interview uses roughly 10–20 requests (agent tool rounds, evaluation, report, memory summary), so a free-tier production key would run out after one or two interviews a day. | Before launch: check the plan of the production key's project in AI Studio | NOT TESTED |
+
+### Q3 evidence (2026-11-21, real API, key read from `.env.local`)
+
+```
+old request (no outputDimensionality): dims=3072 norm=1.0000
+fixed embedTexts: count=2 dims=768,768 norms=1.000000,1.000000
+fixed embedText (query): dims=768 norm=1.000000
+relevance sanity: sim(query, pooling doc)=0.736 > sim(query, react doc)=0.565 -> true
+```
+
+- The first line confirms the original bug: the API's default is 3072 dimensions, so the old 768 check threw on every call.
+- The fixed path returns 768-dimension unit vectors.
+- Relevance is sensible: the pooling query ranks the pooling document above the React document.
 
 ## Requirements for M2 (Alembic baseline)
 
