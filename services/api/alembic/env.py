@@ -7,6 +7,7 @@ run from CI or a laptop without JWT keys or service tokens. Use Neon's
 
 import asyncio
 import os
+from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import pool
@@ -15,6 +16,10 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 from vox_api.core.config import async_database_url
 from vox_api.models import Base
+
+# Log "Running upgrade ..." lines as configured in alembic.ini.
+if context.config.config_file_name is not None:
+    fileConfig(context.config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
