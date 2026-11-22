@@ -11,7 +11,8 @@
     "test": "pnpm --filter @vox/web test",
     "test:e2e": "pnpm --filter @vox/web test:e2e",
     "db:migrate": "pnpm --filter @vox/web db:migrate",
-    "eval": "pnpm --filter @vox/web eval"
+    "db:seed": "uv run --directory services/api python scripts/seed_questions.py",
+    "eval": "uv run --directory services/api python -m evals.run"
   },
   "packageManager": "pnpm@11.6.0"
 }

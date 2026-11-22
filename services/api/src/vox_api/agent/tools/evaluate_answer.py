@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field, StringConstraints, ValidationError
 from sqlalchemy import select
 
-from vox_api.agent.tools.base import Tool, ToolContext
+from vox_api.agent.tools.base import Tool, ToolContext, ToolUsage
 from vox_api.agent.tools.common import (
     append_qa,
     interview_resume,
@@ -13,7 +13,7 @@ from vox_api.agent.tools.common import (
     resume_question_index,
     resume_question_text,
 )
-from vox_api.llm.base import LLMError, Message
+from vox_api.llm.base import LLMError, LLMProvider, Message
 from vox_api.models import Question
 
 RESPONSE_SCHEMA: dict[str, Any] = {
@@ -62,23 +62,28 @@ async def _question_text(args: EvaluateIn, ctx: ToolContext) -> str | None:
     return question.text if question else None
 
 
-async def handler(args: EvaluateIn, ctx: ToolContext) -> dict[str, Any]:
-    question_text = await _question_text(args, ctx)
-    if question_text is None:
-        return {"error": f"Unknown question_id: {args.question_id}"}
+async def grade(llm: LLMProvider, usage: ToolUsage, question_text: str, answer_text: str) -> dict[str, Any]:
+    """The model's structured evaluation of one answer; its tokens are added to usage."""
     prompt = (
-        f"Interview question: {question_text}\n\nCandidate answer: {args.answer_text}\n\n"
+        f"Interview question: {question_text}\n\nCandidate answer: {answer_text}\n\n"
         "Evaluate this answer as a rigorous but fair interviewer. Grade the answer 1-10, "
         "and assess clarity, depth and correctness in one spoken-style sentence each. "
         "List the concrete points the answer missed. Decide if a follow-up question is needed."
     )
-    gen = await ctx.llm.generate([Message("user", prompt)], response_schema=RESPONSE_SCHEMA, temperature=0.3)
-    ctx.usage.tokens_in += gen.tokens_in
-    ctx.usage.tokens_out += gen.tokens_out
+    gen = await llm.generate([Message("user", prompt)], response_schema=RESPONSE_SCHEMA, temperature=0.3)
+    usage.tokens_in += gen.tokens_in
+    usage.tokens_out += gen.tokens_out
     try:
-        evaluation = Evaluation.model_validate_json(gen.text).model_dump(exclude_none=True)
+        return Evaluation.model_validate_json(gen.text).model_dump(exclude_none=True)
     except ValidationError as exc:
         raise LLMError("Gemini evaluation returned malformed JSON") from exc
+
+
+async def handler(args: EvaluateIn, ctx: ToolContext) -> dict[str, Any]:
+    question_text = await _question_text(args, ctx)
+    if question_text is None:
+        return {"error": f"Unknown question_id: {args.question_id}"}
+    evaluation = await grade(ctx.llm, ctx.usage, question_text, args.answer_text)
     bank_id = None if resume_question_index(args.question_id) is not None else args.question_id
     await append_qa(ctx, bank_id, question_text, args.answer_text, evaluation)
     return evaluation

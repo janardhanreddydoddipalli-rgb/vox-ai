@@ -9,7 +9,7 @@
 - Install: `pnpm install --frozen-lockfile`. Every root script delegates to `@vox/web` (see `Makefile`).
 - Checks: `pnpm lint`, `pnpm typecheck`, `pnpm test` (needs `TEST_DATABASE_URL`), `pnpm build`, `pnpm test:e2e`.
 - API: `make api-install`, `make api-dev`, `make api-lint`, `make api-typecheck`, `make api-test` (Docker or `TEST_DATABASE_URL`), `make api-openapi` (after changing API schemas).
-- Migrations: **Alembic only** (`make api-migrate` on empty DBs). Existing Drizzle-built DBs are **stamped** (`docs/runbooks/alembic-cutover.md`). Drizzle is frozen. `pnpm db:migrate`, the web test setup and the evals all run Alembic (needs `uv`).
+- Migrations: **Alembic only** (`make api-migrate` on empty DBs). Existing Drizzle-built DBs are **stamped** (`docs/runbooks/alembic-cutover.md`). Drizzle is frozen. `pnpm db:migrate`, the web test setup and the evals all run Alembic (needs `uv`). Question bank: `pnpm db:seed`. Evals: `pnpm eval` (Python, `services/api/evals`; paid).
 
 ## Architecture
 - *(target)* `apps/web` = UI only. Its only server code is Auth.js, `/api/token` and the internal user-upsert call. No DB access, no LLM calls, no secrets beyond public env and the JWT signing key.
