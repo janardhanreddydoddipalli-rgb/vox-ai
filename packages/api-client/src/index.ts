@@ -14,6 +14,8 @@ export type Problem = {
   detail?: string;
   instance?: string;
   request_id?: string;
+  // Set when one status has several meanings, e.g. 429 "budget_exceeded".
+  code?: string;
 };
 
 export type VoxApiClientOptions = {

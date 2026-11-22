@@ -111,6 +111,7 @@ jobs:
           ROUTE_INTERVIEWS: fastapi
           ROUTE_CHAT: fastapi
           ROUTE_AGENT: fastapi
+          ROUTE_VOICE: fastapi
         run: pnpm run test:e2e
 
       - name: API log, then stop the API

@@ -26,13 +26,16 @@ const VOICE_NAME = "Aoede";
 // the ephemeral token, the live model id, the system prompt and the agent
 // function declarations (single source of truth with the text agent).
 export type LiveSessionConfig = {
+  /** Server-issued voice session id (ROUTE_VOICE=fastapi); keys tool calls and usage. */
+  sessionId?: string;
   token: string;
   model: string;
   systemInstruction: string;
   tools: unknown[];
 };
 
-export type ToolExecutor = (name: string, args: unknown) => Promise<unknown>;
+/** callId is Gemini's functionCall id: a retried call replays its stored result. */
+export type ToolExecutor = (name: string, args: unknown, callId?: string) => Promise<unknown>;
 
 export type UsageVerdict = { budgetExceeded: boolean; message: string | null };
 /** Forwards one usageMetadata frame to the server's cost guard. */
@@ -320,7 +323,7 @@ registerProcessor("pcm", Pcm);`,
       for (const call of msg.toolCall.functionCalls) {
         let response: unknown;
         try {
-          response = await this.opts.toolExecutor(call.name, call.args ?? {});
+          response = await this.opts.toolExecutor(call.name, call.args ?? {}, call.id);
         } catch (e: any) {
           response = { error: e?.message ?? "tool failed" };
         }

@@ -28,6 +28,10 @@ CROSS_USER_TESTS: dict[str, str] = {
     "GET /v1/interviews/{interview_id}/report.pdf": "test_cross_user:test_report_pdf_of_another_user_is_404",
     "GET /v1/interviews/{interview_id}/steps": "test_cross_user:test_agent_steps_of_another_user_is_404",
     "POST /v1/interviews/{interview_id}/turns": "test_cross_user:test_interview_turn_of_another_user_is_404",
+    "POST /v1/voice/sessions/{session_id}/tool-calls": (
+        "test_cross_user:test_voice_tool_call_in_another_users_session_is_404"
+    ),
+    "POST /v1/voice/sessions/{session_id}/usage": "test_cross_user:test_voice_usage_into_another_users_session_is_404",
 }
 
 

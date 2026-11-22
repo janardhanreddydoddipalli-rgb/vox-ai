@@ -9,7 +9,15 @@ from collections.abc import Callable
 
 from httpx import AsyncClient
 
-from tests.helpers import count_rows, fetch_one, insert_interview, insert_memory, insert_qa, insert_user
+from tests.helpers import (
+    count_rows,
+    fetch_one,
+    insert_interview,
+    insert_memory,
+    insert_qa,
+    insert_user,
+    insert_voice_session,
+)
 
 Mint = Callable[..., str]
 
@@ -152,3 +160,49 @@ async def test_interview_turn_of_another_user_is_404(
     )
     assert res.status_code == 404
     assert await count_rows(database_url, "agent_steps", "interview_id = $1", iv) == 0
+
+
+async def test_voice_session_on_another_users_interview_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    iv, attacker = await _foreign_interview(database_url)
+    res = await client.post(
+        "/v1/voice/sessions", json={"interview_id": str(iv)}, headers=bearer(mint_token, attacker)
+    )
+    assert res.status_code == 404
+    assert await count_rows(database_url, "voice_sessions", "user_id = $1", attacker) == 0
+
+
+async def test_voice_tool_call_in_another_users_session_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    owner = await insert_user(database_url)
+    attacker = await insert_user(database_url)
+    iv = await insert_interview(database_url, owner)
+    owner_session = await insert_voice_session(database_url, owner, iv)
+    res = await client.post(
+        f"/v1/voice/sessions/{owner_session}/tool-calls",
+        json={"call_id": "c1", "name": "end_interview", "args": {}},
+        headers=bearer(mint_token, attacker),
+    )
+    assert res.status_code == 404
+    assert await count_rows(database_url, "voice_tool_calls", "voice_session_id = $1", owner_session) == 0
+    assert await count_rows(database_url, "agent_steps", "interview_id = $1", iv) == 0
+
+
+async def test_voice_usage_into_another_users_session_is_404(
+    client: AsyncClient, mint_token: Mint, database_url: str
+) -> None:
+    owner = await insert_user(database_url)
+    attacker = await insert_user(database_url)
+    owner_session = await insert_voice_session(database_url, owner)
+    res = await client.post(
+        f"/v1/voice/sessions/{owner_session}/usage",
+        json={"prompt_tokens": 999_999, "response_tokens": 0},
+        headers=bearer(mint_token, attacker),
+    )
+    assert res.status_code == 404
+    assert await fetch_one(
+        database_url, "select tokens_in from voice_sessions where id = $1", owner_session
+    ) == {"tokens_in": 0}
+    assert await count_rows(database_url, "token_usage", "true") == 0

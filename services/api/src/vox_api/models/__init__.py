@@ -9,6 +9,7 @@ from vox_api.models.conversation import Session, Turn
 from vox_api.models.interview import AgentStep, Interview, InterviewQa, Question, Resume
 from vox_api.models.memory import DocChunk, TokenUsage, UserMemory
 from vox_api.models.user import User
+from vox_api.models.voice import VoiceSession, VoiceToolCall
 
 __all__ = [
     "AgentStep",
@@ -23,4 +24,6 @@ __all__ = [
     "Turn",
     "User",
     "UserMemory",
+    "VoiceSession",
+    "VoiceToolCall",
 ]

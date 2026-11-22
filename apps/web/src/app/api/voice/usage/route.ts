@@ -3,9 +3,9 @@
 // usageMetadata frame here.
 //
 // Trust: counts are client-reported. They are bounded per report and the
-// session's hard cap is the ephemeral token's expireTime; a server-side
-// duration floor keyed by a server-issued voice session id comes with the
-// voice_sessions table in M3.
+// session's hard cap is the ephemeral token's expireTime. With
+// ROUTE_VOICE=fastapi they are keyed by the server-issued voice session and
+// kept per session for reconciliation (docs/verification.md Q1).
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
@@ -14,6 +14,8 @@ import { upsertUserByEmail } from "@/lib/db";
 import { loadInterview } from "@/agent/state";
 import { checkDailyBudget, recordTokenUsage } from "@/lib/cost-guard";
 import { setSentryUser } from "@/lib/observability";
+import { routeTarget } from "@/lib/route-flags";
+import { voiceUsageViaApi } from "@/lib/voice";
 
 export const runtime = "nodejs";
 
@@ -23,6 +25,7 @@ const MAX_TOKENS_PER_REPORT = 1_000_000;
 
 const bodySchema = z.object({
   interviewId: z.string().uuid().nullable().default(null),
+  sessionId: z.string().uuid().optional(),
   promptTokens: z.number().int().min(0).max(MAX_TOKENS_PER_REPORT),
   responseTokens: z.number().int().min(0).max(MAX_TOKENS_PER_REPORT),
 });
@@ -34,11 +37,17 @@ export async function POST(req: NextRequest) {
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid usage report" }, { status: 400 });
-  const { interviewId, promptTokens, responseTokens } = parsed.data;
+  const { interviewId, sessionId, promptTokens, responseTokens } = parsed.data;
 
   const user = await upsertUserByEmail(session.user.email);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(user.id);
+
+  // services/api applies the same per-user limit itself when it serves the route.
+  if (routeTarget("VOICE") === "fastapi") {
+    if (!sessionId) return NextResponse.json({ error: "Invalid usage report" }, { status: 400 });
+    return voiceUsageViaApi(user.id, { sessionId, promptTokens, responseTokens });
+  }
 
   const limited = await checkRate(req, "voice-usage", user.id, 120);
   if (limited) return limited;

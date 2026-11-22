@@ -43,7 +43,7 @@ Paths are relative to `apps/web`.
 
 ## Known gaps (tracked)
 
-- **Live voice trusts the browser for usage numbers and the setup frame.** Fix in M3: a server-issued `voice_session_id`, ephemeral tokens with locked config, and a duration-based usage floor (`docs/verification.md` Q1, Q2).
+- **Live voice trusts the browser for usage numbers and the setup frame.** With `ROUTE_VOICE=fastapi`, tool calls and usage are keyed by a server-issued voice session (it fixes the user and interview) and are idempotent per `call_id`. Still open: ephemeral tokens with locked config (Q2) and a duration-based usage floor (Q1). Both need a paid live session (`docs/verification.md`).
 - **Prompt injection through résumé/JD text:** mitigated only by the tool allowlist and schema-validated tool input. A per-state tool allowlist arrives with the M3 state machine.
 - **`npm audit`/`pnpm audit`:** a postcss advisory inside Next (build-time only, not reachable at runtime) and dev-only drizzle-kit/esbuild advisories. See `docs/backlog.md`.
 

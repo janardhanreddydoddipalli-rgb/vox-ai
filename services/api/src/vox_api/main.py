@@ -16,6 +16,7 @@ from vox_api.core.logging import configure_logging
 from vox_api.core.middleware import REQUEST_ID_HEADER, RequestContextMiddleware
 from vox_api.core.rate_limit import build_rate_limiter
 from vox_api.llm import build_llm
+from vox_api.llm.live import build_live_tokens
 from vox_api.observability.sentry import init_sentry
 
 
@@ -44,6 +45,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.rate_limiter = build_rate_limiter(settings)
     app.state.llm = build_llm(settings)
+    app.state.live_tokens = build_live_tokens(settings)
 
     app.add_middleware(
         CORSMiddleware,

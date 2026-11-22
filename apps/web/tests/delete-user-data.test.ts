@@ -21,6 +21,8 @@ async function seedUser(sql: postgres.Sql, email: string) {
   await sql`insert into user_memories (user_id, kind, text, embedding) values (${u.id}, 'weakness', 'x', ${zeroVector})`;
   await sql`insert into doc_chunks (user_id, source, text, embedding) values (${u.id}, 'resume', 'x', ${zeroVector})`;
   await sql`insert into token_usage (user_id, day, tokens_in, tokens_out) values (${u.id}, '2026-01-01', 1, 1)`;
+  const [vs] = await sql`insert into voice_sessions (user_id, interview_id, expires_at) values (${u.id}, ${iv.id}, now()) returning id`;
+  await sql`insert into voice_tool_calls (voice_session_id, call_id, tool_name, output) values (${vs.id}, 'c1', 't', '{}')`;
   return u.id as string;
 }
 

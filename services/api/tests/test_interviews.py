@@ -9,7 +9,14 @@ import pytest
 from httpx import AsyncClient
 
 from tests.conftest import resume_pdf
-from tests.helpers import count_rows, fetch_one, insert_interview, insert_qa, insert_user
+from tests.helpers import (
+    count_rows,
+    fetch_one,
+    insert_interview,
+    insert_qa,
+    insert_user,
+    insert_voice_session,
+)
 from vox_api.llm.fake import FakeProvider
 
 Mint = Callable[..., str]
@@ -298,8 +305,8 @@ async def test_sessions_and_delete_me(client: AsyncClient, mint_token: Mint, dat
         json={"turns": [{"role": "user", "text": "hi"}]},
         headers=auth(mint_token, me),
     )
-    await insert_interview(database_url, me)
-    await insert_interview(database_url, other)
+    await insert_voice_session(database_url, me, await insert_interview(database_url, me))
+    await insert_voice_session(database_url, other, await insert_interview(database_url, other))
 
     sessions = (await client.get("/v1/sessions", headers=auth(mint_token, me))).json()["sessions"]
     assert [s["id"] for s in sessions] == ["s-mine"]
@@ -309,4 +316,6 @@ async def test_sessions_and_delete_me(client: AsyncClient, mint_token: Mint, dat
     assert await count_rows(database_url, "users", "id = $1", me) == 0
     assert await count_rows(database_url, "interviews", "user_id = $1", me) == 0
     assert await count_rows(database_url, "interviews", "user_id = $1", other) == 1
+    assert await count_rows(database_url, "voice_sessions", "user_id = $1", me) == 0
+    assert await count_rows(database_url, "voice_sessions", "user_id = $1", other) == 1
     assert (await client.get("/v1/me", headers=auth(mint_token, me))).status_code == 401

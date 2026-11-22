@@ -15,10 +15,14 @@ import { functionDeclarations } from "@/agent/loop";
 // session declares no tools (each route runs as its own function on Vercel).
 import "@/agent/tools/all";
 import { isLanguageCode, languageDirective } from "@/lib/languages";
+import { routeTarget } from "@/lib/route-flags";
+import { createVoiceSessionViaApi } from "@/lib/voice";
 import { z } from "zod";
 
 const bodySchema = z.object({
   language: z.string().refine(isLanguageCode).optional(),
+  // Binds the session to this interview (ROUTE_VOICE=fastapi); ownership is checked there.
+  interviewId: z.string().uuid().nullable().optional(),
 });
 
 export const runtime = "nodejs";
@@ -45,6 +49,15 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(user.id);
 
+  // Language is optional, but when present it must be a supported code: it is
+  // interpolated into the system prompt, so free text is never accepted.
+  const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "Unsupported language" }, { status: 400 });
+  const { language } = parsed.data;
+
+  // services/api applies the same rate limit and budget check itself.
+  if (routeTarget("VOICE") === "fastapi") return createVoiceSessionViaApi(user.id, parsed.data);
+
   const limit = await checkRate(req, "voice-session", user.id, VOICE_SESSION_LIMIT);
   if (limit) return limit;
 
@@ -57,12 +70,6 @@ export async function POST(req: NextRequest) {
   if (!key) {
     return NextResponse.json({ error: "Voice service is not configured" }, { status: 503 });
   }
-
-  // Language is optional, but when present it must be a supported code: it is
-  // interpolated into the system prompt, so free text is never accepted.
-  const parsed = bodySchema.safeParse(await req.json().catch(() => ({})));
-  if (!parsed.success) return NextResponse.json({ error: "Unsupported language" }, { status: 400 });
-  const { language } = parsed.data;
 
   const systemInstruction =
     INTERVIEWER_SYSTEM_PROMPT +

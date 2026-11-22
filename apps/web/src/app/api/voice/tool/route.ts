@@ -16,6 +16,8 @@ import { checkDailyBudget } from "@/lib/cost-guard";
 import { setSentryUser, captureVoxError } from "@/lib/observability";
 import { startToolSpan } from "@/lib/tracing";
 import "@/agent/tools/all";
+import { routeTarget } from "@/lib/route-flags";
+import { voiceToolViaApi } from "@/lib/voice";
 
 export const runtime = "nodejs";
 
@@ -28,6 +30,10 @@ const bodySchema = z.object({
   name: z.string().min(1).max(64),
   args: z.record(z.string(), z.any()).default({}),
   interviewId: z.string().uuid().nullable().default(null),
+  // ROUTE_VOICE=fastapi: the server-issued session (it fixes the interview) and
+  // Gemini's call id, so a retried call replays instead of running twice.
+  sessionId: z.string().uuid().optional(),
+  callId: z.string().min(1).max(128).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -39,12 +45,20 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   setSentryUser(user.id);
 
-  const limited = await checkRate(req, "voice-tool", user.id, VOICE_TOOL_LIMIT);
-  if (limited) return limited;
+  // services/api applies the same per-user limit itself when it serves the route.
+  const viaApi = routeTarget("VOICE") === "fastapi";
+  if (!viaApi) {
+    const limited = await checkRate(req, "voice-tool", user.id, VOICE_TOOL_LIMIT);
+    if (limited) return limited;
+  }
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid tool call" }, { status: 400 });
-  const { name, args, interviewId } = parsed.data;
+  const { name, args, interviewId, sessionId, callId } = parsed.data;
+  if (viaApi) {
+    if (!sessionId) return NextResponse.json({ error: "Invalid tool call" }, { status: 400 });
+    return voiceToolViaApi(user.id, { sessionId, callId: callId ?? crypto.randomUUID(), name, args });
+  }
 
   // Ownership: the interview id comes from the browser, so it must belong to
   // the signed-in user before any tool runs. Not owned → 404 (no existence leak).
