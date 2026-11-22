@@ -43,7 +43,9 @@ def get_live_tokens(request: Request) -> LiveTokenMinter | None:
 
 
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
-DbSession = Annotated[AsyncSession, Depends(get_db)]
+# scope="function": commit (or roll back) before the response is sent, so a client
+# never acts on a 200 for a write that isn't committed yet, or that later failed.
+DbSession = Annotated[AsyncSession, Depends(get_db, scope="function")]
 LLMDep = Annotated[LLMProvider | None, Depends(get_llm)]
 LiveTokensDep = Annotated[LiveTokenMinter | None, Depends(get_live_tokens)]
 
