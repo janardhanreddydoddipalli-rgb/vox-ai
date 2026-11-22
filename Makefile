@@ -1,6 +1,6 @@
 # Vox task runner. Every target is one command, so on machines without
 # `make` (Windows without Git Bash tools) run the command under each target directly.
-.PHONY: help install dev dev-web build lint typecheck test test-e2e migrate db-up db-down check \n	api-install api-dev api-lint api-typecheck api-test api-migrate api-up api-openapi
+.PHONY: help install dev dev-web build lint typecheck test test-e2e migrate db-up db-down check \n	api-install api-dev api-lint api-typecheck api-test api-migrate api-seed api-eval api-up api-openapi
 
 help:  ## List targets
 	@grep -E "^[a-z-]+:.*## " Makefile | sed -E "s/:.*## /\t/"
@@ -58,6 +58,12 @@ api-test:  ## Pytest (TEST_DATABASE_URL, or a throwaway Postgres 18 via Docker)
 
 api-migrate:  ## Alembic upgrade head on DATABASE_URL (existing Drizzle DBs: stamp, see runbook)
 	uv run --directory services/api alembic upgrade head
+
+api-seed:  ## Seed the question bank into DATABASE_URL (idempotent)
+	uv run --directory services/api python scripts/seed_questions.py
+
+api-eval:  ## Real-model evals on TEST_DATABASE_URL (paid: needs GEMINI_API_KEY)
+	uv run --directory services/api python -m evals.run
 
 api-up:  ## Build + start the API container with Postgres (compose profile "api")
 	docker compose --profile api up -d --build --wait

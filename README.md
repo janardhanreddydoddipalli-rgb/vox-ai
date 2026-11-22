@@ -51,7 +51,7 @@ Then:
 ```bash
 cd apps/web
 node --env-file=.env.local scripts/migrate.mjs                # creates pgvector + applies migrations
-pnpm exec tsx --env-file=.env.local scripts/seed-questions.ts # loads the 40-question bank
+DATABASE_URL=... pnpm db:seed                                 # loads the 40-question bank (services/api)
 cd ../..
 pnpm dev                                                      # http://localhost:3000
 ```

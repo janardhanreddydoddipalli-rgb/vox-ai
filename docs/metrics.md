@@ -17,7 +17,7 @@ Run it locally against a seeded test database and a real key. **Never against pr
 
 ```bash
 npm run build
-npx tsx scripts/seed-questions.ts                      # with DATABASE_URL set
+pnpm db:seed                                           # from the repo root, with DATABASE_URL set
 E2E_TEST_AUTH=1 AUTH_TRUST_HOST=true DAILY_TOKEN_BUDGET=0 DATABASE_URL=... AUTH_SECRET=... npm start   # key from .env.local
 BASE_URL=http://127.0.0.1:3000 RUNS=5 node scripts/measure-latency.mjs
 ```

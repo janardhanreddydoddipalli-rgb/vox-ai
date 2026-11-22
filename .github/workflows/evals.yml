@@ -14,11 +14,11 @@ permissions:
 
 jobs:
   evals:
-    # 20-case scripted-conversation eval against the real model.
+    # 20-case scripted-conversation eval: services/api's agent loop against the real model.
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/web
+        working-directory: services/api
     services:
       postgres:
         image: pgvector/pgvector:pg18 # matches Neon (Postgres 18.7, pgvector 0.8.7)
@@ -31,30 +31,21 @@ jobs:
           --health-cmd "pg_isready -U ubuntu"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
+      TEST_DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/voicebot_test
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       EVAL_PASS_THRESHOLD: ${{ inputs.pass_threshold }}
     steps:
       - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - uses: astral-sh/setup-uv@v6 # Alembic migrates the test DB
+      - uses: astral-sh/setup-uv@v6
       - name: Install API (Python)
-        working-directory: services/api
         run: uv sync --frozen
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
       - name: Eval (threshold gate)
-        run: pnpm run eval
+        run: uv run python -m evals.run
 
   e2e-real-model:
-    # Full text interview → scored report → PDF, against the real model.
+    # Full text interview → scored report → PDF through the web app and services/api, real model.
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -73,11 +64,10 @@ jobs:
     env:
       DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       AUTH_SECRET: ci-only-not-a-secret
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      E2E_REAL_MODEL: "1" # playwright.config.ts passes the key to Next only with this
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # read by services/api, the only model caller
+      E2E_REAL_MODEL: "1"
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
       - uses: actions/setup-node@v4
         with:
@@ -85,20 +75,36 @@ jobs:
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
-      - uses: astral-sh/setup-uv@v6 # Alembic migrates the test DB
+      - uses: astral-sh/setup-uv@v6
       - name: Install API (Python)
         working-directory: services/api
         run: uv sync --frozen
       - name: Require GEMINI_API_KEY
         run: test -n "$GEMINI_API_KEY" || (echo "Set the GEMINI_API_KEY repository secret first." && exit 1)
-      - name: Migrate (fresh database)
-        run: pnpm run db:migrate
-      - name: Seed question bank
-        run: pnpm exec tsx scripts/seed-questions.ts
+      - name: Migrate and seed the question bank (fresh database)
+        working-directory: services/api
+        run: |
+          uv run alembic upgrade head
+          uv run python scripts/seed_questions.py
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
+      # Ephemeral key pair and service token for this run only (never secrets).
+      - name: Start services/api
+        run: |
+          node scripts/generate-api-jwt-keys.mjs > "$RUNNER_TEMP/keys.env"
+          echo "API_JWT_PRIVATE_KEY=$(grep '^API_JWT_PRIVATE_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)" >> "$GITHUB_ENV"
+          echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
+          export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
+          cd ../../services/api
+          WEB_ORIGIN=http://127.0.0.1:3010 INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789 \
+            nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
+          cat "$RUNNER_TEMP/api.log"; exit 1
       - name: E2E (real model)
         run: pnpm run test:e2e:real-model
+      - name: API log
+        if: always()
+        run: tail -n 100 "$RUNNER_TEMP/api.log" || true
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@v4

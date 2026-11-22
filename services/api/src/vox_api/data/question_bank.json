@@ -1,0 +1,162 @@
+[
+  {
+    "category": "frontend",
+    "text": "Walk me through what happens in the browser between typing a URL and seeing a rendered page."
+  },
+  {
+    "category": "frontend",
+    "text": "What problem does the virtual DOM solve, and how does diffing work at a high level?"
+  },
+  {
+    "category": "frontend",
+    "text": "Explain event delegation and when you would reach for it."
+  },
+  {
+    "category": "frontend",
+    "text": "What is the difference between CSS Grid and Flexbox, and when would you use each?"
+  },
+  {
+    "category": "frontend",
+    "text": "How do browser event loop and microtasks affect the order of your JavaScript?"
+  },
+  {
+    "category": "frontend",
+    "text": "What causes layout shift, and how do you prevent it?"
+  },
+  {
+    "category": "frontend",
+    "text": "Describe how you would make a complex form accessible to screen readers."
+  },
+  {
+    "category": "frontend",
+    "text": "What are the trade-offs of CSS-in-JS versus plain stylesheets?"
+  },
+  {
+    "category": "frontend",
+    "text": "How does the browser cache static assets, and how do cache headers work?"
+  },
+  {
+    "category": "frontend",
+    "text": "Explain hydration in a server-rendered app and where it can go wrong."
+  },
+  {
+    "category": "backend",
+    "text": "Design a URL shortener: data model, write path, and read path."
+  },
+  {
+    "category": "backend",
+    "text": "What does idempotency mean for an API endpoint, and how do you implement it?"
+  },
+  {
+    "category": "backend",
+    "text": "Explain database connection pooling and why serverless apps need it."
+  },
+  {
+    "category": "backend",
+    "text": "How would you implement rate limiting for a distributed API?"
+  },
+  {
+    "category": "backend",
+    "text": "Walk me through the ACID guarantees of a transaction and what each one costs."
+  },
+  {
+    "category": "backend",
+    "text": "When would you choose a queue between services instead of direct HTTP calls?"
+  },
+  {
+    "category": "backend",
+    "text": "How do indexes speed up reads, and what do they cost on writes?"
+  },
+  {
+    "category": "backend",
+    "text": "Explain the N+1 query problem and two ways to fix it."
+  },
+  {
+    "category": "backend",
+    "text": "How would you design pagination for a feed that is constantly growing?"
+  },
+  {
+    "category": "backend",
+    "text": "What is a race condition in a web app, and how do you prevent one around a balance or counter?"
+  },
+  {
+    "category": "dsa",
+    "text": "Given a stream of numbers, how would you find the median at any time?"
+  },
+  {
+    "category": "dsa",
+    "text": "Explain how a hash map handles collisions and what degrades its performance."
+  },
+  {
+    "category": "dsa",
+    "text": "How would you detect a cycle in a linked list, and what is the O(1)-memory approach?"
+  },
+  {
+    "category": "dsa",
+    "text": "Walk me through binary search on an answer space with an example problem."
+  },
+  {
+    "category": "dsa",
+    "text": "When would you pick breadth-first search over depth-first search?"
+  },
+  {
+    "category": "dsa",
+    "text": "How does a priority queue work underneath, and what are its operation costs?"
+  },
+  {
+    "category": "dsa",
+    "text": "Given two sorted arrays, how do you find their intersection efficiently?"
+  },
+  {
+    "category": "dsa",
+    "text": "Explain dynamic programming using the coin change problem."
+  },
+  {
+    "category": "dsa",
+    "text": "How would you reverse words in a string in place, and what are the edge cases?"
+  },
+  {
+    "category": "dsa",
+    "text": "Describe the sliding window technique and a problem it solves well."
+  },
+  {
+    "category": "hr",
+    "text": "Tell me about a project you are genuinely proud of and your specific contribution to it."
+  },
+  {
+    "category": "hr",
+    "text": "Describe a time you disagreed with a teammate. How did it end?"
+  },
+  {
+    "category": "hr",
+    "text": "Tell me about a production incident you caused or fixed. What changed afterwards?"
+  },
+  {
+    "category": "hr",
+    "text": "How do you decide when to ship something imperfect versus keep polishing?"
+  },
+  {
+    "category": "hr",
+    "text": "What kind of feedback is hardest for you to receive, and how do you respond to it?"
+  },
+  {
+    "category": "hr",
+    "text": "Tell me about a time you had to learn something fast under deadline pressure."
+  },
+  {
+    "category": "hr",
+    "text": "Why do you want this role, and what made you start looking?"
+  },
+  {
+    "category": "hr",
+    "text": "Describe the most difficult trade-off you have made in code quality versus speed."
+  },
+  {
+    "category": "hr",
+    "text": "How do you prioritise when three stakeholders all say their work is urgent?"
+  },
+  {
+    "category": "hr",
+    "text": "Where do you want your skills to be two years from now, and what are you doing about it?"
+  }
+]
