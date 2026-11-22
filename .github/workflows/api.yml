@@ -32,9 +32,9 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/vox_test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: services/api/uv.lock
@@ -73,7 +73,7 @@ jobs:
     # The production image builds and starts (health answers) without a database.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build
         run: docker build -f infra/docker/api.Dockerfile -t vox-api:ci services/api
       - name: Smoke (liveness, non-root)
