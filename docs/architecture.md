@@ -35,7 +35,7 @@ apps/web server code (all of it):
 | Cost guard | Per-user daily token budget (`token_usage`) on every paid path: chat, agent tools, embeddings, reports, live voice (per voice session), evals |
 | Observability | Sentry in both apps (ids and metrics only) |
 | Hosting | Database: Neon Singapore. Web and API: **not deployed** with M3/M4 yet. Planned: Vercel `sin1` for the web app, Cloud Run `asia-southeast1` for the API image (ADR 0005). |
-| CI | `ci.yml`: lint, typecheck, API-client drift, web unit tests, build, then E2E against the real API on a freshly migrated database. `api.yml`: ruff, mypy --strict, pytest (Postgres 18 + pgvector), OpenAPI drift, `alembic upgrade` + `alembic check`, Docker build + smoke. Evals are manual (`evals.yml`). All on Postgres 18.7 / pgvector 0.8.7, like Neon. |
+| CI | Path-filtered, parallel jobs (ADR 0006, `docs/ci-performance.md`). `web.yml`: lint, typecheck + API-client drift, unit tests. `api.yml`: ruff, mypy --strict, pytest -n auto (Postgres 18 + pgvector) + OpenAPI drift + `alembic upgrade`/`check`, Docker build + smoke (main, or image changes). `e2e.yml`: build, then E2E against the real API on a freshly migrated database. Evals are manual (`evals.yml`). All on Postgres 18.7 / pgvector 0.8.7, like Neon. |
 
 Not built yet (the rules mark them *target*): a per-state tool allowlist for the interview state machine, Live tokens that lock the model, prompt and tools (needs a paid session, `docs/verification.md` Q2), background workers (arq + Redis) for summaries and embeddings, and Langfuse tracing in the API (`docs/backlog.md`).
 
@@ -61,7 +61,7 @@ vox/
 ├── services/api/          FastAPI service (uv): src/vox_api, alembic/, tests/, evals/, scripts/
 ├── packages/api-client/   @vox/api-client: openapi.json + generated TS types + client
 ├── docs/                  architecture, ADRs, security, metrics, verification, backlog, runbooks
-├── .github/               CI (ci.yml web + E2E, api.yml), manual evals (evals.yml), dependabot
+├── .github/               CI (web.yml, api.yml, e2e.yml), manual evals (evals.yml), dependabot
 ├── compose.yaml           local Postgres 18 (pgvector) + Redis; API under profile "api"
 ├── infra/                 docker/api.Dockerfile, postgres/ init SQL
 ├── Makefile               one command per target (web: pnpm, API: uv)

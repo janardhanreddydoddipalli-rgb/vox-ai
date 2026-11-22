@@ -68,6 +68,11 @@ jobs:
       INTERNAL_API_TOKEN: ci-only-0123456789abcdef0123456789
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # read by services/api, the only model caller
       E2E_REAL_MODEL: "1"
+      # Playwright serves the production build in CI (next start).
+      AUTH_TRUST_HOST: "true"
+      E2E_TEST_AUTH: "1"
+      API_INTERNAL_URL: http://127.0.0.1:8000
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
@@ -88,6 +93,8 @@ jobs:
         run: |
           uv run alembic upgrade head
           uv run python scripts/seed_questions.py
+      - name: Build
+        run: pnpm run build
       - name: Install Playwright browser
         run: pnpm exec playwright install --with-deps chromium
       # Ephemeral key pair and service token for this run only (never secrets).
@@ -95,7 +102,6 @@ jobs:
         run: |
           node scripts/generate-api-jwt-keys.mjs > "$RUNNER_TEMP/keys.env"
           echo "API_JWT_PRIVATE_KEY=$(grep '^API_JWT_PRIVATE_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)" >> "$GITHUB_ENV"
-          echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
           export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
           cd ../../services/api
           WEB_ORIGIN=http://127.0.0.1:3010 \

@@ -12,7 +12,10 @@
     "test:e2e": "pnpm --filter @vox/web test:e2e",
     "db:migrate": "uv run --directory services/api alembic upgrade head",
     "db:seed": "uv run --directory services/api python scripts/seed_questions.py",
-    "eval": "uv run --directory services/api python -m evals.run"
+    "eval": "uv run --directory services/api python -m evals.run",
+    "test-api-fast": "uv run --directory services/api pytest -q -x --ff",
+    "test-web-fast": "pnpm --filter @vox/web exec vitest run --changed",
+    "e2e-smoke": "pnpm --filter @vox/web exec playwright test e2e/smoke.spec.ts"
   },
   "packageManager": "pnpm@11.6.0"
 }

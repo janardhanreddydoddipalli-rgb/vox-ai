@@ -1,9 +1,12 @@
 """Test fixtures: a real Postgres 18 + pgvector, migrated by Alembic; an app with test keys.
 
-Database: TEST_DATABASE_URL if set (CI service container), otherwise a
-throwaway testcontainers pgvector/pgvector:pg18 (needs Docker running).
+Database server: TEST_DATABASE_URL if set (the CI service container, or a local
+one), otherwise a throwaway testcontainers pgvector/pgvector:pg18 (needs Docker).
+That database is migrated once per run and used as a template: each pytest-xdist
+worker (or the single process) tests in its own copy, so `pytest -n auto` is safe.
 """
 
+import asyncio
 import datetime as dt
 import os
 import subprocess
@@ -16,6 +19,8 @@ from typing import Any
 import asyncpg
 import jwt
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import FastAPI
@@ -54,34 +59,75 @@ def admin_database_url() -> Iterator[str]:
         yield pg.get_connection_url()
 
 
-@pytest.fixture(scope="session")
-def database_url(admin_database_url: str) -> str:
-    run_alembic(admin_database_url, "upgrade", "head")
-    return admin_database_url
-
-
 def _dsn(url: str) -> str:
     return url.replace("postgresql+asyncpg://", "postgresql://")
+
+
+def _on_database(url: str, name: str) -> str:
+    """The same server and credentials, another database."""
+    return _dsn(url).rsplit("/", 1)[0] + f"/{name}"
+
+
+def _database_name(url: str) -> str:
+    return _dsn(url).rsplit("/", 1)[1].split("?", 1)[0]
+
+
+_TEMPLATE_LOCK = 715_001  # advisory lock key: one worker at a time migrates or copies the template
+
+
+async def _worker_database(admin_url: str, worker: str) -> str:
+    template = _database_name(admin_url)
+    head = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini"))).get_current_head()
+    # Admin work happens on the maintenance database: Postgres refuses to copy a
+    # template while any session is connected to it.
+    conn = await asyncpg.connect(_on_database(admin_url, "postgres"))
+    try:
+        await conn.execute("SELECT pg_advisory_lock($1)", _TEMPLATE_LOCK)
+        try:
+            tpl = await asyncpg.connect(_dsn(admin_url))
+            try:
+                has_version = await tpl.fetchval("SELECT to_regclass('public.alembic_version') IS NOT NULL")
+                current = (
+                    await tpl.fetchval("SELECT version_num FROM alembic_version") if has_version else None
+                )
+            finally:
+                await tpl.close()
+            if current != head:
+                run_alembic(admin_url, "upgrade", "head")  # once per run, by whichever worker is first
+            name = f"{template}_{worker}"
+            await conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
+            await conn.execute(f'CREATE DATABASE "{name}" TEMPLATE "{template}"')
+        finally:
+            await conn.execute("SELECT pg_advisory_unlock($1)", _TEMPLATE_LOCK)
+    finally:
+        await conn.close()
+    return _on_database(admin_url, name)
+
+
+@pytest.fixture(scope="session")
+def database_url(admin_database_url: str, worker_id: str) -> str:
+    """This worker's own migrated database ("master" when not running under xdist)."""
+    return asyncio.run(_worker_database(admin_database_url, worker_id))
 
 
 @pytest.fixture
 async def make_database(admin_database_url: str) -> AsyncIterator[Callable[[str], Any]]:
     """Create empty, uniquely named databases on the same server; dropped afterwards."""
     created: list[str] = []
-    base = _dsn(admin_database_url)
+    maintenance = _on_database(admin_database_url, "postgres")
 
     async def _make(prefix: str) -> str:
         name = f"{prefix}_{uuid.uuid4().hex[:8]}"
-        conn = await asyncpg.connect(base)
+        conn = await asyncpg.connect(maintenance)
         try:
             await conn.execute(f'CREATE DATABASE "{name}"')
         finally:
             await conn.close()
         created.append(name)
-        return base.rsplit("/", 1)[0] + f"/{name}"
+        return _on_database(admin_database_url, name)
 
     yield _make
-    conn = await asyncpg.connect(base)
+    conn = await asyncpg.connect(maintenance)
     try:
         for name in created:
             await conn.execute(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
