@@ -4,7 +4,7 @@ name: Web
 # Deterministic only (web tests mock every API call). Build + E2E live in e2e.yml.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: &paths
       - "apps/web/**"
       - "packages/**"
@@ -13,7 +13,7 @@ on:
       - "pnpm-workspace.yaml"
       - ".github/workflows/web.yml"
   push:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: *paths
 
 permissions:

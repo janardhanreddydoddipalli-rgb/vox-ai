@@ -2,14 +2,14 @@ name: API
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: &paths
       - "services/api/**"
       - "packages/api-client/**"
       - "infra/docker/api.Dockerfile"
       - ".github/workflows/api.yml"
   push:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: *paths
 
 permissions:

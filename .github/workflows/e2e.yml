@@ -4,7 +4,7 @@ name: E2E
 # Runs when either side changes. Deterministic: no GEMINI_API_KEY anywhere.
 on:
   pull_request:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: &paths
       - "apps/web/**"
       - "packages/**"
@@ -14,7 +14,7 @@ on:
       - "pnpm-workspace.yaml"
       - ".github/workflows/e2e.yml"
   push:
-    branches: [main]
+    branches: [main, phase10/integration]
     paths: *paths
 
 permissions:
