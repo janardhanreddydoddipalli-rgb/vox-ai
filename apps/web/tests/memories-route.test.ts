@@ -30,7 +30,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  delete process.env.ROUTE_MEMORIES;
+  process.env.ROUTE_MEMORIES = "next";
   vi.unstubAllGlobals();
 });
 

@@ -4,7 +4,7 @@ import { test, expect, type Page } from "@playwright/test";
 // so no live session can start; with ROUTE_VOICE=fastapi it is services/api
 // answering, where tool calls and usage need a server-issued session id that
 // another user can't use.
-const viaApi = process.env.ROUTE_VOICE === "fastapi";
+const viaApi = process.env.ROUTE_VOICE !== "next";
 const UNKNOWN_SESSION = "55555555-5555-4555-8555-555555555555";
 
 async function signIn(page: Page, who: string) {

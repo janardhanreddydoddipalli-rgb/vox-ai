@@ -55,7 +55,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  delete process.env.ROUTE_VOICE;
+  process.env.ROUTE_VOICE = "next";
   vi.unstubAllGlobals();
 });
 

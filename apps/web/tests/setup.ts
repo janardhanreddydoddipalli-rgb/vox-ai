@@ -10,6 +10,11 @@ process.env.DATABASE_URL = TEST_URL; // client.ts reads this; same test db
 process.env.AUTH_SECRET = process.env.AUTH_SECRET || "test-secret-not-a-real-credential";
 process.env.GEMINI_API_KEY = process.env.GEMINI_API_KEY || "test-key";
 process.env.GEMINI_MODEL = "gemini-3.5-flash";
+// Unit tests exercise the web's own implementations unless a test opts into
+// forwarding (ROUTE_<NAME>=fastapi); services/api is never running here.
+for (const name of ["MEMORIES", "TURNS", "INTERVIEWS", "CHAT", "AGENT", "VOICE"]) {
+  process.env[`ROUTE_${name}`] ??= "next";
+}
 
 // Guard: the client module throws unless NODE_ENV=test; vitest sets it.
 if (process.env.NODE_ENV !== "test") {

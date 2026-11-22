@@ -48,7 +48,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  delete process.env.ROUTE_AGENT;
+  process.env.ROUTE_AGENT = "next";
   vi.unstubAllGlobals();
 });
 

@@ -97,21 +97,20 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/api.log"; exit 1
 
-      # No API configured at all: proves the web app needs none while flags are next.
-      - name: E2E smoke, every route served by apps/web (ROUTE_*=next)
-        env:
-          API_INTERNAL_URL: ""
+      # Default since M4: every moved route is served by services/api.
+      - name: E2E smoke, routes served by services/api (default)
         run: pnpm run test:e2e
 
-      # Routes moved to services/api in M3 (add one line per moved route).
-      - name: E2E smoke, moved routes served by services/api (ROUTE_*=fastapi)
+      # Rollback path: every flag on next, and no API configured at all.
+      - name: E2E smoke, rollback to apps/web (ROUTE_*=next)
         env:
-          ROUTE_MEMORIES: fastapi
-          ROUTE_TURNS: fastapi
-          ROUTE_INTERVIEWS: fastapi
-          ROUTE_CHAT: fastapi
-          ROUTE_AGENT: fastapi
-          ROUTE_VOICE: fastapi
+          API_INTERNAL_URL: ""
+          ROUTE_MEMORIES: next
+          ROUTE_TURNS: next
+          ROUTE_INTERVIEWS: next
+          ROUTE_CHAT: next
+          ROUTE_AGENT: next
+          ROUTE_VOICE: next
         run: pnpm run test:e2e
 
       - name: API log, then stop the API
