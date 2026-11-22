@@ -27,6 +27,7 @@ class FakeProvider:
     """Replies with scripted text (in order) or echoes the last user message."""
 
     model = "fake-1"
+    embedding_model = "fake-embedding-1"
 
     def __init__(self, replies: Sequence[str] = (), turns: Sequence[ModelTurn] = ()) -> None:
         self._replies = list(replies)

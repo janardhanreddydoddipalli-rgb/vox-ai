@@ -61,7 +61,7 @@ class GeminiProvider:
         self, api_key: str, model: str, embedding_model: str, *, client: httpx.AsyncClient | None = None
     ) -> None:
         self.model = model
-        self._embedding_model = embedding_model
+        self.embedding_model = embedding_model
         self._client = client or httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0))
         self._headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
 
@@ -196,7 +196,7 @@ class GeminiProvider:
             return []
         requests = [
             {
-                "model": f"models/{self._embedding_model}",
+                "model": f"models/{self.embedding_model}",
                 "content": {"parts": [{"text": t}]},
                 "taskType": task,
                 "outputDimensionality": EMBEDDING_DIMENSIONS,
@@ -205,7 +205,7 @@ class GeminiProvider:
         ]
         try:
             res = await self._client.post(
-                f"{BASE_URL}/models/{self._embedding_model}:batchEmbedContents",
+                f"{BASE_URL}/models/{self.embedding_model}:batchEmbedContents",
                 headers=self._headers,
                 json={"requests": requests},
             )

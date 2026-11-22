@@ -49,7 +49,14 @@ async def index_document(
     vectors = await llm.embed(chunks, task="RETRIEVAL_DOCUMENT")
     await db.execute(delete(DocChunk).where(DocChunk.user_id == user_id, DocChunk.source == source))
     db.add_all(
-        DocChunk(user_id=user_id, source=source, text=c, embedding=v)
+        DocChunk(
+            user_id=user_id,
+            source=source,
+            text=c,
+            embedding=v,
+            embedding_model=llm.embedding_model,
+            embedding_dim=len(v),
+        )
         for c, v in zip(chunks, vectors, strict=True)
     )
     await db.flush()

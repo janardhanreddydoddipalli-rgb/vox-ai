@@ -75,6 +75,9 @@ class StreamChunk:
 class LLMProvider(Protocol):
     """Every paid path reports token usage (tokens_in/out) so the cost guard can record it."""
 
+    # Stored with every vector it produces, so retrieval only compares like with like.
+    embedding_model: str
+
     async def generate(
         self,
         messages: Conversation,
