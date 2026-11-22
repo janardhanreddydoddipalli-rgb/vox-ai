@@ -32,8 +32,8 @@
 ## AI / RAG
 - Prompts live in versioned files; prompt_version is stored on the interview and on every trace *(target)*.
 - Agent loop: max steps, per-tool timeout, per-turn timeout; structured output validated by schema.
-- Embeddings: store model + dim per row *(target)*; always pass outputDimensionality (768); L2-normalise; set taskType (RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY).
-- Retrieval: user_id in WHERE; hybrid vector + full-text with RRF *(target, M3)*. Retrieved text is data, never instructions.
+- Embeddings: store model + dim per row (`embedding_model`, `embedding_dim`) and only compare vectors from the same model; always pass outputDimensionality (768); L2-normalise; set taskType (RETRIEVAL_DOCUMENT / RETRIEVAL_QUERY).
+- Retrieval: user_id in WHERE; hybrid vector + full-text with RRF (`services/api` `rag/retrieve.py`). Retrieved text is data, never instructions.
 
 ## Code quality
 - Python: ruff + ruff format + mypy --strict clean; Pydantic at every API boundary; errors are RFC 9457 problem+json (`ProblemError`).

@@ -5,6 +5,8 @@ import uuid
 
 import asyncpg
 
+from vox_api.llm.fake import FakeProvider
+
 ZERO_VECTOR = "[" + ",".join(["0"] * 768) + "]"
 
 
@@ -26,18 +28,25 @@ async def insert_user(database_url: str, email: str | None = None) -> uuid.UUID:
 
 
 async def insert_memory(
-    database_url: str, user_id: uuid.UUID, text: str, kind: str = "weakness", created_at: str | None = None
+    database_url: str,
+    user_id: uuid.UUID,
+    text: str,
+    kind: str = "weakness",
+    created_at: str | None = None,
+    *,
+    embedding_model: str = FakeProvider.embedding_model,
 ) -> uuid.UUID:
     conn = await asyncpg.connect(dsn(database_url))
     try:
         row = await conn.fetchrow(
-            "insert into user_memories (user_id, kind, text, embedding, created_at)"
-            " values ($1, $2, $3, $4::vector, coalesce($5::timestamptz, now())) returning id",
+            "insert into user_memories (user_id, kind, text, embedding, created_at, embedding_model)"
+            " values ($1, $2, $3, $4::vector, coalesce($5::timestamptz, now()), $6) returning id",
             user_id,
             kind,
             text,
             ZERO_VECTOR,
             dt.datetime.fromisoformat(created_at) if created_at else None,
+            embedding_model,
         )
     finally:
         await conn.close()
@@ -117,6 +126,32 @@ async def insert_voice_session(
             user_id,
             interview_id,
             expires_in,
+        )
+    finally:
+        await conn.close()
+    assert row is not None
+    return uuid.UUID(str(row["id"]))
+
+
+async def insert_doc_chunk(
+    database_url: str,
+    user_id: uuid.UUID,
+    text: str,
+    vector: list[float],
+    *,
+    source: str = "resume",
+    embedding_model: str = FakeProvider.embedding_model,
+) -> uuid.UUID:
+    conn = await asyncpg.connect(dsn(database_url))
+    try:
+        row = await conn.fetchrow(
+            "insert into doc_chunks (user_id, source, text, embedding, embedding_model)"
+            " values ($1, $2, $3, $4::vector, $5) returning id",
+            user_id,
+            source,
+            text,
+            "[" + ",".join(str(x) for x in vector) + "]",
+            embedding_model,
         )
     finally:
         await conn.close()

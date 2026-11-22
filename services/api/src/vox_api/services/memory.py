@@ -77,7 +77,7 @@ async def summarize(
     for (kind, text), vec in zip(candidates, vectors, strict=True):
         nearest = await db.scalar(
             select(1 - UserMemory.embedding.cosine_distance(vec))
-            .where(UserMemory.user_id == user_id)
+            .where(UserMemory.user_id == user_id, UserMemory.embedding_model == llm.embedding_model)
             .order_by(UserMemory.embedding.cosine_distance(vec))
             .limit(1)
         )
@@ -86,7 +86,16 @@ async def summarize(
         ):
             skipped += 1
             continue
-        db.add(UserMemory(user_id=user_id, kind=kind, text=text, embedding=vec))
+        db.add(
+            UserMemory(
+                user_id=user_id,
+                kind=kind,
+                text=text,
+                embedding=vec,
+                embedding_model=llm.embedding_model,
+                embedding_dim=len(vec),
+            )
+        )
         kept.append(vec)
         created += 1
     await db.flush()
