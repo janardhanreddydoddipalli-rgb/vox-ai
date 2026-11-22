@@ -55,6 +55,14 @@ class Interview(Base):
     report: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     completed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     language: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'en'::text"))
+    # The engine's state machine (engine/machine.py, Alembic 0004). state_version
+    # increases on every persisted transition; failed_from is where `retry` returns.
+    state: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'INTRO'::text"))
+    state_version: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    state_entered_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+    failed_from: Mapped[OptStr]
 
 
 def _interview_fk(table: str) -> ForeignKey:
