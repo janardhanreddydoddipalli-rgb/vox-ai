@@ -1,9 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-// E2E never calls a real (paid) model unless explicitly asked: Next would
-// otherwise load GEMINI_API_KEY from .env.local. Only the manual real-model
-// workflow sets E2E_REAL_MODEL=1.
-const realModel = process.env.E2E_REAL_MODEL === "1";
+// The web app makes no model or database calls: it renders, signs in and mints
+// API tokens. services/api must be running (API_INTERNAL_URL); the browser
+// reaches it at NEXT_PUBLIC_API_URL, which defaults to the same URL here.
+const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? process.env.API_INTERNAL_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,13 +15,14 @@ export default defineConfig({
   },
   webServer: {
     command: "pnpm exec next dev -p 3010",
-    url: "http://127.0.0.1:3010/api/health",
+    url: "http://127.0.0.1:3010/signin",
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
       E2E_TEST_AUTH: "1",
       ...process.env,
-      GEMINI_API_KEY: realModel ? (process.env.GEMINI_API_KEY ?? "") : "",
+      API_INTERNAL_URL: process.env.API_INTERNAL_URL ?? apiUrl,
+      NEXT_PUBLIC_API_URL: apiUrl,
     },
   },
 });

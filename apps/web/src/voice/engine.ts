@@ -10,8 +10,12 @@
 //   3. Text mode  — the page's own fallback when start() throws (no mic, no
 //      SpeechRecognition); sendText still works everywhere.
 //
-// Tool calls made by the live model are executed through /api/voice/tool so
-// the Phase 3 agent tools behave identically in both providers.
+// Live sessions come from services/api (POST /v1/voice/sessions), which mints
+// the ephemeral token and binds a voice session to the interview; the live
+// model's tool calls and usage go back to that session, so the agent tools
+// behave identically in both providers.
+import { api } from "@/lib/api-browser";
+import { isLanguageCode } from "@/lib/languages";
 import { LiveVoice, type LiveSessionConfig } from "./live-voice";
 import { BrowserVoice } from "./browser-voice";
 import type { ProviderHandlers as Handlers, TurnLatency, VoiceMode, VoiceProvider } from "./provider";
@@ -24,40 +28,47 @@ export type EngineHandlers = Handlers & {
 };
 
 async function fetchSessionConfig(language: string, interviewId: string | null): Promise<LiveSessionConfig> {
-  const res = await fetch("/api/voice/session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(language ? { language } : {}), ...(interviewId ? { interviewId } : {}) }),
+  const code = language.split("-")[0];
+  const { data, error, response } = await api.POST("/v1/voice/sessions", {
+    body: { interview_id: interviewId, language: isLanguageCode(code) ? code : null },
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `live session unavailable (${res.status})`);
+  if (!data) {
+    const problem = error as { code?: string; detail?: string } | undefined;
+    throw new Error(problem?.code ?? problem?.detail ?? `live session unavailable (${response.status})`);
   }
-  return res.json();
+  return {
+    sessionId: data.session_id,
+    token: data.token,
+    model: data.model,
+    systemInstruction: data.system_instruction,
+    tools: data.tools,
+  };
 }
 
-type SessionKeys = { interviewId: string | null; sessionId?: string };
-
-async function executeTool(name: string, args: unknown, keys: SessionKeys, callId?: string): Promise<unknown> {
-  const res = await fetch("/api/voice/tool", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, args, ...keys, callId }),
-  });
-  const data = await res.json().catch(() => ({ ok: false, error: "tool route unreachable" }));
-  if (!data.ok) return { error: data.error ?? "tool failed", message: data.message };
-  return data.result;
+async function executeTool(sessionId: string, name: string, args: unknown, callId?: string): Promise<unknown> {
+  try {
+    const { data, error } = await api.POST("/v1/voice/sessions/{session_id}/tool-calls", {
+      params: { path: { session_id: sessionId } },
+      body: { call_id: callId ?? crypto.randomUUID(), name, args: (args ?? {}) as Record<string, unknown> },
+    });
+    if (!data) return { error: (error as { detail?: string } | undefined)?.detail ?? "tool failed" };
+    if (!data.ok) return { error: data.error ?? "tool failed", message: data.message };
+    return data.result ?? { ok: true };
+  } catch {
+    return { error: "tool service unreachable" };
+  }
 }
 
-async function reportUsage(keys: SessionKeys, promptTokens: number, responseTokens: number) {
-  const res = await fetch("/api/voice/usage", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...keys, promptTokens, responseTokens }),
-  });
-  if (!res.ok) return { budgetExceeded: false, message: null };
-  const data = await res.json().catch(() => ({}));
-  return { budgetExceeded: data.budgetExceeded === true, message: data.message ?? null };
+async function reportUsage(sessionId: string, promptTokens: number, responseTokens: number) {
+  try {
+    const { data } = await api.POST("/v1/voice/sessions/{session_id}/usage", {
+      params: { path: { session_id: sessionId } },
+      body: { prompt_tokens: promptTokens, response_tokens: responseTokens },
+    });
+    return { budgetExceeded: data?.budget_exceeded === true, message: data?.message ?? null };
+  } catch {
+    return { budgetExceeded: false, message: null };
+  }
 }
 
 export class VoiceEngine {
@@ -84,12 +95,11 @@ export class VoiceEngine {
     // 1) Try the Gemini Live API.
     try {
       const config = await fetchSessionConfig(this.language, this.interviewId);
-      const keys = (): SessionKeys => ({ interviewId: this.interviewId, sessionId: config.sessionId });
       const live = new LiveVoice({
         handlers: this.h,
         config,
-        toolExecutor: (name, args, callId) => executeTool(name, args, keys(), callId),
-        usageReporter: (promptTokens, responseTokens) => reportUsage(keys(), promptTokens, responseTokens),
+        toolExecutor: (name, args, callId) => executeTool(config.sessionId, name, args, callId),
+        usageReporter: (promptTokens, responseTokens) => reportUsage(config.sessionId, promptTokens, responseTokens),
       });
       live.language = this.language;
       live.interviewId = this.interviewId;
@@ -122,7 +132,7 @@ export class VoiceEngine {
       this.provider.sendText(text);
       return;
     }
-    // Text mode: run the same /api/chat SSE pipeline for typed input, minus
+    // Text mode: run the same chat SSE pipeline for typed input, minus
     // speech. A BrowserVoice that was never start()ed captures no mic —
     // sendText alone drives the pipeline.
     const fallback = new BrowserVoice(this.h);

@@ -64,6 +64,8 @@ jobs:
     env:
       DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       AUTH_SECRET: ci-only-not-a-secret
+      # CI-only service credential, shared by the web server (sign-in upsert) and the API.
+      INTERNAL_API_TOKEN: ci-only-0123456789abcdef0123456789
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }} # read by services/api, the only model caller
       E2E_REAL_MODEL: "1"
     steps:
@@ -96,7 +98,7 @@ jobs:
           echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
           export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
           cd ../../services/api
-          WEB_ORIGIN=http://127.0.0.1:3010 INTERNAL_API_TOKEN=ci-only-0123456789abcdef0123456789 \
+          WEB_ORIGIN=http://127.0.0.1:3010 \
             nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/api.log"; exit 1

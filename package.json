@@ -1,7 +1,7 @@
 {
   "name": "vox",
   "private": true,
-  "description": "Vox — AI mock-interview voice assistant (monorepo)",
+  "description": "Vox \u2014 AI mock-interview voice assistant (monorepo)",
   "scripts": {
     "dev": "pnpm --filter @vox/web dev",
     "build": "pnpm --filter @vox/web build",
@@ -10,7 +10,7 @@
     "typecheck": "pnpm --filter @vox/web typecheck",
     "test": "pnpm --filter @vox/web test",
     "test:e2e": "pnpm --filter @vox/web test:e2e",
-    "db:migrate": "pnpm --filter @vox/web db:migrate",
+    "db:migrate": "uv run --directory services/api alembic upgrade head",
     "db:seed": "uv run --directory services/api python scripts/seed_questions.py",
     "eval": "uv run --directory services/api python -m evals.run"
   },

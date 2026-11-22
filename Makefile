@@ -26,13 +26,13 @@ lint:  ## ESLint
 typecheck:  ## TypeScript (tsc --noEmit)
 	pnpm typecheck
 
-test:  ## Unit + API tests (needs TEST_DATABASE_URL, see README)
+test:  ## Web unit tests (no database; API calls mocked)
 	pnpm test
 
-test-e2e:  ## Playwright smoke E2E, no model calls (needs DATABASE_URL)
+test-e2e:  ## Playwright smoke E2E against a running API, no model calls (needs DATABASE_URL)
 	pnpm test:e2e
 
-migrate:  ## Create pgvector + apply migrations to DATABASE_URL
+migrate:  ## Alembic upgrade head on DATABASE_URL (pgvector + every revision)
 	pnpm db:migrate
 
 db-up:  ## Start local Postgres (pgvector) + Redis from compose.yaml

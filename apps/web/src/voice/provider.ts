@@ -6,10 +6,10 @@
 //
 // Two implementations ship:
 //   - BrowserVoice: Web Speech API (SpeechRecognition + speechSynthesis),
-//     LLM replies stream from POST /api/chat (works everywhere Chrome runs).
+//     replies stream from services/api as SSE (works everywhere Chrome runs).
 //   - LiveVoice: Gemini Live API over WebSocket with full-duplex PCM audio;
 //     the session is authorized by a short-lived ephemeral token issued by
-//     /api/voice/token — the GEMINI_API_KEY never reaches the browser.
+//     services/api: the GEMINI_API_KEY never reaches the browser.
 
 export type Turn = {
   role: "user" | "assistant";

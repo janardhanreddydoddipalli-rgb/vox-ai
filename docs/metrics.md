@@ -6,20 +6,20 @@ The M3 rule for every route move: **latency must be no worse than this baseline 
 
 | Metric | Definition | How |
 |---|---|---|
-| Time to first token (text) | `POST /api/chat` sent → first SSE `token` event | `scripts/measure-latency.mjs` |
-| Turn total (text) | `POST /api/chat` sent → SSE `done` | `scripts/measure-latency.mjs` |
-| Report generation | `POST /api/interviews/{id}/end` sent → response | `scripts/measure-latency.mjs` |
+| Time to first token (text) | `POST /v1/interviews/{id}/turns` sent → first SSE `token` event | `apps/web/scripts/measure-latency.mjs` |
+| Turn total (text) | the same request → SSE `done` | `apps/web/scripts/measure-latency.mjs` |
+| Report generation | `POST /v1/interviews/{id}/end` sent → response | `apps/web/scripts/measure-latency.mjs` |
 | Time to first audio (live voice) | User stops speaking → first model audio plays | By hand: the latency pill on the interview page, 10 turns, Chrome desktop |
 
 ## How to run the text baseline
 
-Run it locally against a seeded test database and a real key. **Never against production**: the script refuses non-local URLs and signs in through the E2E test provider.
+Run it locally against a seeded test database and a real key. **Never against production**: the script refuses non-local URLs and signs in through the E2E test provider, then calls the API with a token from `/api/token`, as the browser does.
 
 ```bash
-npm run build
-pnpm db:seed                                           # from the repo root, with DATABASE_URL set
-E2E_TEST_AUTH=1 AUTH_TRUST_HOST=true DAILY_TOKEN_BUDGET=0 DATABASE_URL=... AUTH_SECRET=... npm start   # key from .env.local
-BASE_URL=http://127.0.0.1:3000 RUNS=5 node scripts/measure-latency.mjs
+pnpm db:migrate && pnpm db:seed                        # from the repo root, with DATABASE_URL set
+DAILY_TOKEN_BUDGET=0 make api-dev                      # services/api/.env holds the real GEMINI_API_KEY
+pnpm build && E2E_TEST_AUTH=1 AUTH_TRUST_HOST=true pnpm start   # apps/web/.env.local points at the API
+cd apps/web && BASE_URL=http://127.0.0.1:3000 API_URL=http://127.0.0.1:8000 RUNS=5 node scripts/measure-latency.mjs
 ```
 
 Notes on the server flags:

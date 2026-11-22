@@ -1,4 +1,4 @@
-// Typed client for services/api (not used by apps/web until M3).
+// Typed client for services/api, used by apps/web in the browser and in server pages.
 // Types come from openapi.json: regenerate with `make api-openapi`.
 import createClient, { type Middleware } from "openapi-fetch";
 import type { paths, components } from "./schema";

@@ -1,15 +1,14 @@
+import { readFile } from "node:fs/promises";
 import { test, expect } from "@playwright/test";
 import postgres from "postgres";
+import { apiAs, signIn } from "./helpers";
 
-// Interview lifecycle without model calls: start (no résumé) → end with no
-// answers (report needs no model) → report page → PDF → dashboard → delete data.
-// Runs with ROUTE_INTERVIEWS=next and =fastapi in CI.
+// Interview lifecycle without model calls, through the UI (the browser calls
+// services/api directly): start (no résumé) → end with no answers (the report
+// needs no model) → report page → PDF download → dashboard → delete my data.
 test("start, end, read the report, download the PDF, then delete my data", async ({ page }) => {
-  const email = `life-${Date.now()}@example.com`;
-  await page.goto("/signin");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Test sign-in" }).click();
-  await page.waitForURL("**/dashboard");
+  const email = await signIn(page, "life");
+  const a = await apiAs(page);
 
   await page.goto("/new");
   await page.getByRole("radio", { name: "Backend Engineer" }).click();
@@ -18,8 +17,8 @@ test("start, end, read the report, download the PDF, then delete my data", async
   await page.waitForURL("**/interview/**");
   const interviewId = new URL(page.url()).pathname.split("/").at(-1)!;
 
-  const info = await (await page.request.get(`/api/interviews/${interviewId}`)).json();
-  expect(info).toMatchObject({ id: interviewId, role: "Backend Engineer", level: "senior", status: "active", questionCount: 0 });
+  const info = await (await a.get(`/v1/interviews/${interviewId}`)).json();
+  expect(info).toMatchObject({ id: interviewId, role: "Backend Engineer", level: "senior", status: "active", qa: [] });
 
   await page.getByRole("button", { name: "End interview" }).click();
   await page.waitForURL(`**/interviews/${interviewId}/report`);
@@ -27,10 +26,12 @@ test("start, end, read the report, download the PDF, then delete my data", async
   await expect(page.locator(".score-big")).toHaveText("0.0");
   await expect(page.getByText("No questions were answered in this interview.")).toBeVisible();
 
-  const pdf = await page.request.get(`/api/interviews/${interviewId}/report.pdf`);
-  expect(pdf.status()).toBe(200);
-  expect(pdf.headers()["content-type"]).toBe("application/pdf");
-  expect((await pdf.body()).subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download PDF" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe(`vox-interview-${interviewId.slice(0, 8)}.pdf`);
+  expect((await readFile(await download.path())).subarray(0, 8).toString("latin1")).toBe("%PDF-1.4");
 
   await page.goto("/dashboard");
   await expect(page.locator(".interview-row", { hasText: "Backend Engineer" })).toBeVisible();
@@ -39,6 +40,8 @@ test("start, end, read the report, download the PDF, then delete my data", async
   await page.getByRole("button", { name: "Delete my data" }).click();
   await page.getByRole("button", { name: "Yes, delete everything" }).click();
   await expect(page.getByRole("button", { name: "Delete my data" })).toBeDisabled();
+  // The account is gone, and so is the session that named it.
+  await expect.poll(async () => (await page.request.get("/api/token")).status()).toBe(401);
 
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
   try {

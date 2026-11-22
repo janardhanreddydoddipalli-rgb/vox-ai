@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
+import { api } from "@/lib/api-browser";
 
 type Session = { id: string; mode: string; createdAt: string };
 type Turn = { sessionId: string; role: string; text: string; latencyMs: number | null; createdAt: string };
@@ -26,11 +28,13 @@ export default function DashboardClient({
   const [confirming, setConfirming] = useState(false);
 
   const deleteMyData = async () => {
-    const res = await fetch("/api/me/delete", { method: "DELETE" });
-    if (res.ok) {
+    const { response } = await api.DELETE("/v1/me");
+    if (response.ok) {
       setCount(0);
       setDeleted(true);
       setConfirming(false);
+      // The account is gone, so the session must go too (it names the deleted user).
+      await signOut({ redirect: false });
     }
   };
 

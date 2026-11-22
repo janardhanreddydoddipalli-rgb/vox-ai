@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { middlewareAuth as auth } from "@/lib/auth-edge";
 
-// Protect the dashboard and every API route except /api/health.
-// /api/auth/* must stay open so sign-in works.
-const PUBLIC_PATHS = ["/api/health", "/api/auth"];
+// Protect the dashboard and /api/token. /api/auth/* must stay open so sign-in
+// works. Everything else the app does is a call to services/api.
+const PUBLIC_PATHS = ["/api/auth"];
 
 export default async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

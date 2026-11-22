@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 import postgres from "postgres";
 
-// Settings → memories, end to end. Runs with ROUTE_MEMORIES=next (web DB) and
-// =fastapi (services/api) in CI. No model calls: the memory row is seeded.
+// Settings → memories, end to end: the page lists them server-side and the
+// browser deletes through services/api. No model calls: the memory row is seeded.
 const zeroVector = `[${Array(768).fill(0).join(",")}]`;
 
 test("list and delete a memory on the settings page", async ({ page }) => {

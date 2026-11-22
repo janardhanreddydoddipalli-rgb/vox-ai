@@ -24,5 +24,5 @@ where the full interview flow — questions, scoring and PDF report — still wo
    spoken question is in that language.
 3. On the chat page, check the provider pill ("Gemini Live" / "Browser speech") and the
    per-turn latency pill.
-4. To force the fallback, temporarily revoke the key (503 from `/api/voice/session`) —
+4. To force the fallback, temporarily unset the API's key (503 from `POST /v1/voice/sessions`) —
    the page should announce the fallback and continue with browser speech.

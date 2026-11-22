@@ -4,6 +4,7 @@ import { liveSetupMessage, type LiveSessionConfig } from "@/voice/live-voice";
 // The Live API's setup.tools is a list of Tool objects; function declarations go
 // inside one Tool's functionDeclarations. Bare declarations are rejected at setup.
 const config: LiveSessionConfig = {
+  sessionId: "55555555-5555-4555-8555-555555555555",
   token: "auth_tokens/t",
   model: "models/live",
   systemInstruction: "You are an interviewer.",

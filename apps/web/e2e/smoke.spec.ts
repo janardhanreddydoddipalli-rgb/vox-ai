@@ -1,16 +1,18 @@
 import { test, expect } from "@playwright/test";
+import { API_URL } from "./helpers";
 
 // CI smoke E2E: no model calls (CI never uses a real Gemini key). Covers the
-// paths every user takes before the interview starts: health, auth gate,
-// test sign-in, dashboard and onboarding.
+// paths every user takes before the interview starts: the API is up, the auth
+// gates hold, test sign-in, dashboard and onboarding.
 
-test("health endpoint responds", async ({ request }) => {
-  const res = await request.get("/api/health");
+test("the API is up", async ({ request }) => {
+  const res = await request.get(`${API_URL}/v1/health`);
   expect(res.status()).toBe(200);
 });
 
-test("API rejects signed-out callers", async ({ request }) => {
-  const res = await request.get("/api/interviews/00000000-0000-4000-8000-000000000000");
+test("signed-out callers get no token and the API rejects them", async ({ request }) => {
+  expect((await request.get("/api/token")).status()).toBe(401);
+  const res = await request.get(`${API_URL}/v1/interviews/00000000-0000-4000-8000-000000000000`);
   expect(res.status()).toBe(401);
 });
 

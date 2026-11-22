@@ -1,22 +1,25 @@
 // Latency baseline for the text interview path (docs/metrics.md).
 // Measures, over RUNS scripted interviews (1 opening turn + 3 answers each):
-//   - time to first token  (POST /api/chat → first SSE `token` event)
-//   - turn total           (POST /api/chat → `done`)
-//   - report generation    (POST /api/interviews/{id}/end)
+//   - time to first token  (POST /v1/interviews/{id}/turns → first SSE `token` event)
+//   - turn total           (same request → `done`)
+//   - report generation    (POST /v1/interviews/{id}/end)
 // and prints p50/p95. Live-voice first-audio is measured by hand from the
 // latency pill on the interview page (see docs/metrics.md).
 //
-// Local only: signs in through the E2E test provider, so the server must run
-// with E2E_TEST_AUTH=1 and a real GEMINI_API_KEY, against a seeded test DB.
-//   E2E_TEST_AUTH=1 GEMINI_API_KEY=... DATABASE_URL=... npm start
-//   BASE_URL=http://127.0.0.1:3000 RUNS=5 node scripts/measure-latency.mjs
+// Local only: signs in to the web app through the E2E test provider (run it
+// with E2E_TEST_AUTH=1) and calls services/api with a token from /api/token, as
+// the browser does. The API needs a real GEMINI_API_KEY and a seeded test DB.
+//   BASE_URL=http://127.0.0.1:3000 API_URL=http://127.0.0.1:8000 RUNS=5 node scripts/measure-latency.mjs
 
 const BASE_URL = process.env.BASE_URL ?? "http://127.0.0.1:3000";
+const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 const RUNS = Number(process.env.RUNS ?? 5);
 
-if (!["localhost", "127.0.0.1"].includes(new URL(BASE_URL).hostname)) {
-  console.error("measure-latency: refusing to run against a non-local server");
-  process.exit(1);
+for (const url of [BASE_URL, API_URL]) {
+  if (!["localhost", "127.0.0.1"].includes(new URL(url).hostname)) {
+    console.error("measure-latency: refusing to run against a non-local server");
+    process.exit(1);
+  }
 }
 
 const ANSWERS = [
@@ -59,16 +62,36 @@ async function signIn() {
   }
 }
 
-// One /api/chat turn: returns { ttftMs, totalMs, interviewId, engine }.
-async function chatTurn(payload) {
+// A fresh 5-minute API token for the signed-in user (one per run).
+async function apiToken() {
+  const res = await http("/api/token");
+  if (!res.ok) throw new Error(`/api/token ${res.status}`);
+  return (await res.json()).token;
+}
+
+async function api(token, path, init = {}) {
+  return fetch(API_URL + path, { ...init, headers: { ...(init.headers ?? {}), authorization: `Bearer ${token}` } });
+}
+
+async function createInterview(token) {
+  const form = new FormData();
+  form.set("role", "Backend Engineer");
+  form.set("level", "mid");
+  const res = await api(token, "/v1/interviews", { method: "POST", body: form });
+  if (res.status !== 201) throw new Error(`/v1/interviews ${res.status}`);
+  return (await res.json()).id;
+}
+
+// One agent turn: returns { ttftMs, totalMs, engine, text }.
+async function chatTurn(token, interviewId, userText, history) {
   const started = performance.now();
-  const res = await http("/api/chat", {
+  const res = await api(token, `/v1/interviews/${interviewId}/turns`, {
     method: "POST",
-    headers: { "content-type": "application/json", origin: BASE_URL },
-    body: JSON.stringify(payload),
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ user_text: userText, history }),
   });
-  if (!res.ok || !res.body) throw new Error(`/api/chat ${res.status}`);
-  const out = { ttftMs: null, totalMs: null, interviewId: payload.interviewId ?? null, engine: null, text: "" };
+  if (!res.ok || !res.body) throw new Error(`/v1/interviews/{id}/turns ${res.status}`);
+  const out = { ttftMs: null, totalMs: null, engine: null, text: "" };
   const decoder = new TextDecoder();
   let buf = "";
   for await (const chunk of res.body) {
@@ -78,10 +101,7 @@ async function chatTurn(payload) {
     for (const block of events) {
       const event = block.match(/^event: (.*)$/m)?.[1];
       const data = JSON.parse(block.match(/^data: (.*)$/m)?.[1] ?? "null");
-      if (event === "meta") {
-        out.engine ??= data.engine;
-        out.interviewId ??= data.interview_id ?? null;
-      }
+      if (event === "meta") out.engine ??= data.engine;
       if (event === "token") {
         out.ttftMs ??= performance.now() - started;
         out.text += data.text;
@@ -104,20 +124,21 @@ const engines = new Set();
 
 await signIn();
 for (let run = 0; run < RUNS; run++) {
+  const token = await apiToken();
+  const interviewId = await createInterview(token);
   const history = [];
-  let turn = await chatTurn({ userText: "Hi, I'm ready to start.", interview: { role: "Backend Engineer", level: "mid" } });
-  const interviewId = turn.interviewId;
+  let turn = await chatTurn(token, interviewId, "Hi, I'm ready to start.", history);
   for (let i = 0; ; i++) {
     engines.add(turn.engine);
     samples.ttft.push(turn.ttftMs);
     samples.turnTotal.push(turn.totalMs);
     if (i === ANSWERS.length) break;
     history.push({ role: "assistant", text: turn.text || "…" });
-    turn = await chatTurn({ userText: ANSWERS[i], history: history.slice(-20), interviewId });
+    turn = await chatTurn(token, interviewId, ANSWERS[i], history.slice(-20));
     history.push({ role: "user", text: ANSWERS[i] });
   }
   const started = performance.now();
-  const end = await http(`/api/interviews/${interviewId}/end`, { method: "POST", headers: { origin: BASE_URL } });
+  const end = await api(token, `/v1/interviews/${interviewId}/end`, { method: "POST" });
   if (!end.ok) throw new Error(`/end ${end.status}`);
   samples.report.push(performance.now() - started);
   console.error(`run ${run + 1}/${RUNS} done`);
@@ -126,6 +147,7 @@ for (let run = 0; run < RUNS; run++) {
 const summary = {
   measuredAt: new Date().toISOString(),
   baseUrl: BASE_URL,
+  apiUrl: API_URL,
   runs: RUNS,
   engines: [...engines],
   ttftMs: { p50: pct(samples.ttft, 50), p95: pct(samples.ttft, 95), n: samples.ttft.length },

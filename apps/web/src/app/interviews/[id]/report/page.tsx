@@ -1,20 +1,17 @@
-import { auth } from "@/lib/auth";
-import { upsertUserByEmail } from "@/lib/db";
+import { currentUserId } from "@/lib/auth";
 import { loadReportView } from "@/lib/interviews";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import PdfButton from "./pdf-button";
 
 export const dynamic = "force-dynamic";
 
 export default async function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) redirect("/signin");
-  const user = await upsertUserByEmail(session.user.email);
-  if (!user) redirect("/signin");
+  const userId = await currentUserId();
+  if (!userId) redirect("/signin");
 
-  const view = await loadReportView(user.id, id);
+  const view = await loadReportView(userId, id);
   if (!view) {
     return (
       <main className="report-page">
@@ -41,10 +38,6 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
   }
 
   const report = iv.report;
-  const h = await headers();
-  const scheme = h.get("x-forwarded-proto") ?? "http";
-  const host = h.get("host") ?? "localhost:3000";
-  const pdfHref = `${scheme}://${host}/api/interviews/${id}/report.pdf`;
 
   if (!report) {
     return (
@@ -67,9 +60,7 @@ export default async function ReportPage({ params }: { params: Promise<{ id: str
             {iv.role} · {iv.level} · {new Date(iv.createdAt).toLocaleDateString()}
           </p>
         </div>
-        <a className="btn btn-secondary" href={pdfHref} download={`vox-interview-${id.slice(0, 8)}.pdf`}>
-          Download PDF
-        </a>
+        <PdfButton interviewId={id} />
       </header>
 
       <section className="score-band" aria-label="Overall score">

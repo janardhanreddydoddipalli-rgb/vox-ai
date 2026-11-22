@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { VoiceEngine, type Turn, type VoiceMode } from "@/voice/engine";
+import { apiFetch, apiUrl, currentToken } from "@/lib/api-browser";
+import { turnsBody, turnsPath } from "@/lib/turns-payload";
 
 type Status = "idle" | "listening" | "thinking" | "speaking";
 
@@ -63,12 +65,14 @@ export default function Home() {
   const flush = useCallback((extra?: Turn) => {
     const all = extra ? [...turnsRef.current, extra] : [...turnsRef.current];
     if (all.length === saved.current) return;
-    fetch("/api/turns", {
+    apiFetch(turnsPath(sid.current), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId: sid.current, mode: modeRef.current ?? "browser", turns: all.slice(saved.current) }),
+      body: turnsBody(modeRef.current, all.slice(saved.current)),
     })
-      .then(() => (saved.current = all.length))
+      .then((res) => {
+        if (res.ok) saved.current = all.length;
+      })
       .catch(() => {});
   }, []);
 
@@ -78,7 +82,8 @@ export default function Home() {
   }, [turns, flush]);
 
   // Page closing: flush unsaved turns (including a partial in-flight turn)
-  // via sendBeacon, which survives unload where fetch may not.
+  // with a keepalive fetch, which outlives the page. Best effort: it needs a
+  // still-valid token, and every completed exchange was already saved.
   useEffect(() => {
     const onPageHide = () => {
       const all = [...turnsRef.current];
@@ -86,12 +91,14 @@ export default function Home() {
       if (partialText) all.push({ role: "user", text: partialText });
       const unsaved = all.slice(saved.current);
       if (unsaved.length === 0) return;
-      const payload = JSON.stringify({
-        sessionId: sid.current,
-        mode: modeRef.current ?? "browser",
-        turns: unsaved,
-      });
-      navigator.sendBeacon?.("/api/turns", new Blob([payload], { type: "application/json" }));
+      const token = currentToken();
+      if (!token) return;
+      void fetch(apiUrl(turnsPath(sid.current)), {
+        method: "POST",
+        keepalive: true,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: turnsBody(modeRef.current, unsaved),
+      }).catch(() => {});
       saved.current = all.length;
     };
     window.addEventListener("pagehide", onPageHide);

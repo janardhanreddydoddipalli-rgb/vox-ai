@@ -1,6 +1,6 @@
 # Runbook: hand migrations over from Drizzle to Alembic
 
-From M2, **Alembic (`services/api/alembic`) is the only migration tool.** `apps/web/drizzle` is frozen: never generate or apply a new Drizzle migration.
+From M2, **Alembic (`services/api/alembic`) is the only migration tool.** Drizzle was removed from the repo in M4; its migrations 0000–0008 stay in git history.
 
 The Alembic baseline (`0001_baseline.py`) builds exactly the schema that Drizzle migrations 0000–0008 built. This is proven by an empty `pg_dump --schema-only` diff (M2 report) and pinned by `services/api/tests/test_schema_baseline.py` in CI.
 
@@ -15,7 +15,7 @@ The Alembic baseline (`0001_baseline.py`) builds exactly the schema that Drizzle
 
 ## Local and test databases
 
-Since M3, `pnpm db:migrate`, the web test setup and the evals run Alembic. A local database that Drizzle built earlier has no `alembic_version` table, so `upgrade` fails on existing tables. Either recreate it (it's test data), or stamp it: `uv run --directory services/api alembic stamp 0001` with `DATABASE_URL` set.
+`pnpm db:migrate`, the API tests and the evals run Alembic. A local database that Drizzle built earlier has no `alembic_version` table, so `upgrade` fails on existing tables. Either recreate it (it's test data), or stamp it: `uv run --directory services/api alembic stamp 0001` with `DATABASE_URL` set.
 
 ## Cutover steps for Neon (production)
 
@@ -32,7 +32,7 @@ Needs explicit approval. Run from `services/api` with the **direct** (non-pooler
    uv run --env-file ../../apps/web/.env.neon.local alembic stamp 0001
    uv run --env-file ../../apps/web/.env.neon.local alembic current   # → 0001 (head)
    ```
-4. **Freeze Drizzle:** from now on, schema changes are new Alembic revisions, written expand/contract while apps/web still reads the same tables (M3).
+4. **Upgrade to head:** `uv run --env-file ../../apps/web/.env.neon.local alembic upgrade head` applies the later revisions (`0002` voice sessions, `0003` embedding model per row and full-text search). They are expand-only, so the web version still in production keeps working. Contract steps (e.g. dropping the `embedding_model` defaults) wait until that old web version is gone.
 
 ## Rollback
 
@@ -42,4 +42,4 @@ Stamping only writes the `alembic_version` table. To undo, drop that table: `DRO
 
 | Database | Stamped? |
 |---|---|
-| Neon Singapore `production` | **Not yet.** Verified on 2026-11-22 that it matches Drizzle 0000-0008 exactly (`verify_drizzle_schema.py`: columns, constraints, indexes and extensions identical). Stamp at the start of M3 (needs approval). |
+| Neon Singapore `production` | **Not yet.** Verified on 2026-11-22 that it matches Drizzle 0000-0008 exactly (`verify_drizzle_schema.py`: columns, constraints, indexes and extensions identical). Stamp in M5, before the first API deploy (needs approval). |

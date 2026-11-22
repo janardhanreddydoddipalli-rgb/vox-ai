@@ -1,6 +1,6 @@
 # ADR 0004: Web → API auth with short-lived EdDSA JWTs
 
-- Status: Accepted (implemented in M2; not yet used by any browser call)
+- Status: Accepted (implemented in M2; every browser call to the API uses it since M4)
 - Date: 2026-11-22
 
 ## Context
@@ -23,7 +23,7 @@ Users sign in through Auth.js in `apps/web` (Google only, ADR 0002). From M3 the
 4. **Identity bootstrap:** `POST /internal/users/upsert` resolves an email to the stable user id.
    - It's protected by a shared service credential (`X-Internal-Token`, at least 32 characters, compared in constant time).
    - It's excluded from the public OpenAPI schema.
-   - The Auth.js `jwt` callback calls it at sign-in behind `AUTH_UPSERT_VIA_API` (default **off** in M2, since the web app still has its own DB access).
+   - The Auth.js `jwt` callback calls it at sign-in (and once for sessions from before M4) and keeps the id in the session as `session.user.id`; `/api/token` mints for that id. A failed upsert fails sign-in.
 5. **Failure shape:** every auth failure is `401 application/problem+json` with `WWW-Authenticate: Bearer`. A token for a deleted user is also 401.
 6. **Keys:** one pair per environment, generated with `apps/web/scripts/generate-api-jwt-keys.mjs`.
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { INTERVIEW_LANGUAGES, type LanguageCode } from "@/lib/languages";
+import { apiFetch, problemDetail } from "@/lib/api-browser";
 
 const ROLES = ["Frontend Engineer", "Backend Engineer", "Full-stack Engineer", "DSA / Coding", "HR / Behavioral"];
 const LEVELS = [
@@ -77,11 +78,11 @@ export default function NewInterviewPage() {
       form.set("role", role.trim());
       form.set("level", level);
       form.set("language", language);
-      form.set("jobDescription", jd);
+      if (jd.trim()) form.set("job_description", jd);
       if (file) form.set("resume", file);
-      const res = await fetch("/api/interviews", { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not start the interview");
+      const res = await apiFetch("/v1/interviews", { method: "POST", body: form });
+      if (res.status !== 201) throw new Error(await problemDetail(res, "Could not start the interview"));
+      const data = (await res.json()) as { id: string };
       router.push(`/interview/${data.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start the interview");
