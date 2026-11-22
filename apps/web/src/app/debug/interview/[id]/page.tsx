@@ -1,7 +1,6 @@
 // Dev-only trace viewer: the step timeline for one interview. Server
 // component; renders in dev only, scoped to the signed-in user.
-import { auth } from "@/lib/auth";
-import { upsertUserByEmail } from "@/lib/db";
+import { currentUserId } from "@/lib/auth";
 import { loadAgentSteps } from "@/lib/interviews";
 import { redirect } from "next/navigation";
 
@@ -12,11 +11,9 @@ export default async function DebugInterviewPage({ params }: { params: Promise<{
     return <p>Debug pages are available in development only.</p>;
   }
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.email) redirect("/signin");
-  // users.id, not session.user.id (that is the OAuth account id and never matched).
-  const user = await upsertUserByEmail(session.user.email);
-  const steps = user ? await loadAgentSteps(user.id, id) : null;
+  const userId = await currentUserId();
+  if (!userId) redirect("/signin");
+  const steps = await loadAgentSteps(userId, id);
   if (!steps) {
     return <p style={{ padding: 24 }}>No interview with that id for your account.</p>;
   }

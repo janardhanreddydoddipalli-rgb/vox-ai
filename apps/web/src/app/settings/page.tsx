@@ -1,18 +1,15 @@
-import { auth } from "@/lib/auth";
+import { currentUserId } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { upsertUserByEmail } from "@/lib/db";
 import { listMyMemories } from "@/lib/memories";
 import Link from "next/link";
 import SettingsClient from "./settings-client";
 
 // Server component: the signed-in user's own memories, never anyone else's.
 export default async function Settings() {
-  const session = await auth();
-  const email = session?.user?.email;
-  if (!email) redirect("/");
+  const userId = await currentUserId();
+  if (!userId) redirect("/");
 
-  const user = await upsertUserByEmail(email);
-  const memories = user ? await listMyMemories(user.id) : [];
+  const memories = await listMyMemories(userId);
 
   return (
     <main className="page">

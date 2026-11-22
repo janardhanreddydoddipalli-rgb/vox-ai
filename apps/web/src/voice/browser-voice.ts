@@ -1,9 +1,10 @@
 "use client";
 
 // BrowserVoice: speech in/out via the Web Speech API (SpeechRecognition +
-// speechSynthesis). LLM replies stream from POST /api/chat as SSE
-// (meta / token / sentence / done / error); each completed sentence is queued
-// to TTS immediately so speech starts on the first sentence.
+// speechSynthesis). Replies stream from services/api as SSE (POST /v1/chat, or
+// /v1/interviews/{id}/turns in an interview: meta / token / sentence / done /
+// error); each completed sentence is queued to TTS so speech starts on the first.
+import { apiFetch, SignedOutError } from "@/lib/api-browser";
 import {
   getMicStream,
   measureLevel,
@@ -13,6 +14,8 @@ import {
 } from "./provider";
 
 const RESUME_DELAY_MS = 300;
+const OFFLINE_REPLY = "Sorry, I had trouble responding. I'm running in offline mode right now.";
+const NOT_FOUND_REPLY = "I couldn't find that interview.";
 
 export class BrowserVoice implements VoiceProvider {
   readonly mode = "browser" as const;
@@ -46,21 +49,8 @@ export class BrowserVoice implements VoiceProvider {
   async start() {
     this.stream = await getMicStream();
     this.stopLevel = measureLevel(this.stream, (v) => this.h.onLevel(v));
-    await this.checkOffline();
     this.startRecognition();
     this.h.onMode(this.mode);
-  }
-
-  private async checkOffline() {
-    try {
-      const res = await fetch("/api/health");
-      if (!res.ok) return;
-      const data = await res.json();
-      this.offline = data.engine === "offline";
-      this.h.onOffline(this.offline);
-    } catch {
-      /* health check is best-effort */
-    }
   }
 
   private startRecognition() {
@@ -139,6 +129,7 @@ export class BrowserVoice implements VoiceProvider {
     let firstTokenMs: number | undefined;
     let totalLlmMs: number | undefined;
     let streamError: string | null = null;
+    let fallbackReply = OFFLINE_REPLY;
     let firstSpokenAt: number | null = null;
     const latency: TurnLatency = { connectMs: undefined };
 
@@ -163,18 +154,16 @@ export class BrowserVoice implements VoiceProvider {
     };
 
     try {
-      const res = await fetch("/api/chat", {
+      // An interview's turns run the agent there; otherwise plain chat.
+      const path = this.interviewId ? `/v1/interviews/${encodeURIComponent(this.interviewId)}/turns` : "/v1/chat";
+      const res = await apiFetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userText: text,
-          history: this.history,
-          ...(this.language ? { language: this.language } : {}),
-          ...(this.interviewId ? { interviewId: this.interviewId } : {}),
-        }),
+        body: JSON.stringify({ user_text: text, history: this.history }),
         signal: ctl.signal,
       });
       latency.connectMs = Date.now() - started;
+      if (res.status === 404 || res.status === 422) fallbackReply = NOT_FOUND_REPLY;
       if (!res.ok || !res.body) throw new Error(`stream unavailable (${res.status})`);
 
       const reader = res.body.getReader();
@@ -223,6 +212,7 @@ export class BrowserVoice implements VoiceProvider {
       }
     } catch (e: any) {
       if (e?.name === "AbortError") return; // barged in; drop the reply
+      if (e instanceof SignedOutError) fallbackReply = e.message;
       streamError = e?.message ?? "stream failed";
       console.warn("chat stream failed before first token:", streamError);
     }
@@ -231,7 +221,7 @@ export class BrowserVoice implements VoiceProvider {
 
     // Offline fallback when the stream failed before the first token arrived.
     if (!gotFirstToken && streamError) {
-      const fallback = "Sorry, I had trouble responding. I'm running in offline mode right now.";
+      const fallback = fallbackReply;
       this.offline = true;
       this.h.onOffline(true);
       this.history.push({ role: "user", text }, { role: "assistant", text: fallback });

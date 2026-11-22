@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import type { Problem } from "@vox/api-client";
 import { VoiceEngine, type Turn } from "@/voice/engine";
+import { api } from "@/lib/api-browser";
 
 type InterviewInfo = {
   id: string;
@@ -13,7 +15,6 @@ type InterviewInfo = {
   questionCount: number;
   hasResume: boolean;
   language?: string;
-  error?: string;
 };
 
 const TARGET_QUESTIONS = 3;
@@ -40,9 +41,19 @@ function InterviewClient({ interviewId, router }: { interviewId: string; router:
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`/api/interviews/${interviewId}`);
-      if (!res.ok) throw new Error((await res.json()).error ?? "Failed to load");
-      const data: InterviewInfo = await res.json();
+      const { data: d, response } = await api.GET("/v1/interviews/{interview_id}", {
+        params: { path: { interview_id: interviewId } },
+      });
+      if (!d) throw new Error([404, 422].includes(response.status) ? "Interview not found" : "Failed to load");
+      const data: InterviewInfo = {
+        id: d.id,
+        role: d.role,
+        level: d.level,
+        status: d.status,
+        questionCount: d.qa.length,
+        hasResume: d.has_resume,
+        language: d.language,
+      };
       setInfo(data);
       setQuestionCount(data.questionCount);
       return data;
@@ -103,9 +114,10 @@ function InterviewClient({ interviewId, router }: { interviewId: string; router:
     setEndError("");
     engineRef.current?.stop();
     try {
-      const res = await fetch(`/api/interviews/${interviewId}/end`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Could not end the interview");
+      const { data, error } = await api.POST("/v1/interviews/{interview_id}/end", {
+        params: { path: { interview_id: interviewId } },
+      });
+      if (!data) throw new Error((error as Problem | undefined)?.detail ?? "Could not end the interview");
       router.push(`/interviews/${interviewId}/report`);
     } catch (e) {
       setEndError(e instanceof Error ? e.message : "Could not end the interview");

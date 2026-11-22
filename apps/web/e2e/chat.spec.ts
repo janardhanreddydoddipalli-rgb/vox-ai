@@ -1,28 +1,13 @@
 import { test, expect } from "@playwright/test";
+import { apiAs, parseSse, signIn } from "./helpers";
 
-// Plain voice chat over SSE through the signed-in browser session. CI has no
-// Gemini key, so both apps answer from the offline fallback; with
-// ROUTE_CHAT=fastapi the stream comes from services/api, passed through by Next.
-function parseSse(text: string) {
-  return text
-    .split("\n\n")
-    .filter((b) => b.trim())
-    .map((b) => {
-      const lines = b.split("\n");
-      return {
-        event: lines.find((l) => l.startsWith("event: "))!.slice(7),
-        data: JSON.parse(lines.find((l) => l.startsWith("data: "))!.slice(6)),
-      };
-    });
-}
-
+// Plain voice chat over SSE from services/api. CI has no Gemini key, so the API
+// answers from its offline fallback.
 test("chat streams meta, sentences and done", async ({ page }) => {
-  await page.goto("/signin");
-  await page.getByLabel("Email").fill(`chat-${Date.now()}@example.com`);
-  await page.getByRole("button", { name: "Test sign-in" }).click();
-  await page.waitForURL("**/dashboard");
+  await signIn(page, "chat");
+  const a = await apiAs(page);
 
-  const res = await page.request.post("/api/chat", { data: { userText: "hello there", history: [] } });
+  const res = await a.post("/v1/chat", { data: { user_text: "hello there", history: [] } });
   expect(res.status()).toBe(200);
   expect(res.headers()["content-type"]).toContain("text/event-stream");
 

@@ -51,12 +51,9 @@ test("sign up, run a 3-question text interview, and read the report @real-model"
   await expect(page.getByText("Question by question")).toBeVisible();
 
   // 5. PDF download works.
-  const pdf = await page.request.get(`/api/interviews/${interviewId(page)}/report.pdf`);
-  expect(pdf.status()).toBe(200);
-  expect(pdf.headers()["content-type"]).toBe("application/pdf");
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Download PDF" }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^vox-interview-.*\.pdf$/);
 });
-
-function interviewId(page: Page): string {
-  const url = page.url();
-  return url.split("/interviews/")[1]?.split("/")[0] ?? "";
-}

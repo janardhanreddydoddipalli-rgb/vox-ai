@@ -6,7 +6,7 @@ What has been verified, how, and what is still open. Each entry is marked **VERI
 
 | # | Question | Why it matters | Verify when | Status |
 |---|---|---|---|---|
-| Q1 | Does Gemini Live's `usageMetadata` report **per turn** or a **running total** for the session? | `live-voice.ts` forwards each frame to `/api/voice/usage`, which **adds** it to the daily ledger. If it's a running total, usage is over-counted. | M3, against a real Live session with the exact model in use (log a few frames and compare against the prompt and response sizes) | NOT TESTED |
+| Q1 | Does Gemini Live's `usageMetadata` report **per turn** or a **running total** for the session? | `live-voice.ts` forwards each frame to `POST /v1/voice/sessions/{id}/usage`, which **adds** it to the daily ledger (and the session's totals). If it's a running total, usage is over-counted. | M3, against a real Live session with the exact model in use (log a few frames and compare against the prompt and response sizes) | NOT TESTED |
 | Q2 | Can ephemeral tokens lock the model, system instruction and tools for our Live model (`liveConnectConstraints`)? | Today the browser sends the setup frame, so it could change the prompt or tools. If tokens can't lock them, the fallback is a server-side WebSocket relay (needs its own ADR). | M3. The voice route moved in #19 with unlocked tokens (the same as the web); locking needs a paid session (`docs/needs-human.md` #8) | NOT TESTED |
 | Q3 | Does `gemini-embedding-001` return 768 dimensions with `outputDimensionality: 768`, and does recall work end to end? | Before `23708e3`, every embedding call failed the dimension check, so memory and RAG never worked. | 2026-11-21, real API (see below) | **VERIFIED** for embeddings. End-to-end recall inside an interview: NOT TESTED (Gemini quota, Q4) |
 | Q4 | Which Gemini tier does **production** use? | The dev key is on the **free tier: 20 `generateContent` requests per day per model** (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`; `gemini-3.5-flash` counts against `gemini-3.6-flash`). One interview uses roughly 10–20 requests (agent tool rounds, evaluation, report, memory summary), so a free-tier production key would run out after one or two interviews a day. | Before launch: check the plan of the production key's project in AI Studio | NOT TESTED |
@@ -54,3 +54,18 @@ relevance sanity: sim(query, pooling doc)=0.736 > sim(query, react doc)=0.565 ->
 | Internal upsert from the web code | `upsertUserViaApi` twice → same id; wrong credential → 401 | VERIFIED |
 | API image | 79 MB, uid 10001, health/ready OK, `alembic current` in the image, Docker HEALTHCHECK healthy | VERIFIED (locally) |
 | `make` targets | `make` isn't installed on the dev machine; every underlying command was run directly | PARTIAL |
+
+## M3–M4: routes moved, web server code removed (2026-11-22)
+
+| Item | Evidence | Status |
+|---|---|---|
+| Each moved route behaves the same on the API | E2E green with the route on `next` and on `fastapi`, locally and in CI, for every M3 PR (#13–#20); M4.1 (#21) ran the default and the full rollback | VERIFIED |
+| Cross-user access is 404 on every `{id}` route | `tests/security/test_cross_user.py`; the route-ownership guard fails CI on an unregistered `{id}` route | VERIFIED |
+| Voice tool calls: server-issued session, idempotent per `call_id` | API tests: a retried call runs the tool once (one model call, one answer row); another tool under the same `call_id` is 409; foreign sessions are 404 | VERIFIED (API tests) |
+| Live setup frame wraps tools in `functionDeclarations` (#18) | Unit test failed on the old shape, passes now | PARTIAL (no real Live session: paid) |
+| A real live-voice session end to end (connect, tool call, usage) | Needs paid Gemini Live calls (`docs/needs-human.md` #7) | NOT TESTED |
+| Hybrid retrieval (vector + full-text, RRF) and same-model filtering | `tests/test_rag.py` on deterministic fake embeddings: an exact term ranks first, other users' and other models' rows never compared | VERIFIED (fake embeddings) |
+| Evals ported to Python | Pure checks unit-tested; one case runs end to end on the fake provider in CI | PARTIAL (never run on the real model: paid) |
+| Browser calls the API directly (token from `/api/token`, CORS) | E2E: start, end, report, PDF download, settings delete and account deletion all go browser → API | VERIFIED (E2E, local and CI) |
+| Web app has no database, model or rate-limit access | Drizzle, the agent and every server module deleted; the build lists only `/api/auth/*` and `/api/token` as server routes | VERIFIED |
+| Real-model E2E (`@real-model`) and the latency baseline | Paid calls / billing | NOT TESTED / DEFERRED |

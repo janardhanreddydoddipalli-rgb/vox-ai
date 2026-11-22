@@ -1,7 +1,7 @@
 import NextAuth, { type NextAuthConfig } from "next-auth";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
-import { upsertUserViaApi, upsertViaApiEnabled } from "./api-internal";
+import { upsertUserViaApi } from "./api-internal";
 
 const e2eEnabled = process.env.E2E_TEST_AUTH === "1";
 
@@ -31,25 +31,31 @@ export const authConfig: NextAuthConfig = {
   session: { strategy: "jwt" },
   pages: {},
   callbacks: {
-    // Keep a users row in sync with the signed-in identity.
+    // The users row lives in services/api: resolve its id at sign-in (and once
+    // for sessions started before it was kept in the token). A failure fails
+    // sign-in: without the id the app can't call the API.
     async jwt({ token, user, profile }) {
       if (user?.email) {
         token.email = user.email;
         token.name = token.name ?? user.name ?? profile?.name ?? null;
         token.picture = token.picture ?? user.image ?? profile?.picture ?? null;
-        // M2 (off by default): resolve the stable user id through services/api
-        // at sign-in. Non-fatal while the web app still owns its own DB access.
-        if (upsertViaApiEnabled()) {
-          try {
-            token.userId = await upsertUserViaApi({ email: user.email, name: token.name, image: token.picture });
-          } catch (err) {
-            console.error("[auth] user upsert via API failed:", err instanceof Error ? err.message : "unknown");
-          }
-        }
+      }
+      if (token.email && !token.userId) {
+        token.userId = await upsertUserViaApi({ email: token.email, name: token.name, image: token.picture });
       }
       return token;
+    },
+    // session.user.id is the users.id from services/api, never the OAuth account id.
+    session({ session, token }) {
+      session.user.id = token.userId ?? "";
+      return session;
     },
   },
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+
+/** The signed-in user's users.id (services/api), or null when signed out. */
+export async function currentUserId(): Promise<string | null> {
+  return (await auth())?.user?.id || null;
+}

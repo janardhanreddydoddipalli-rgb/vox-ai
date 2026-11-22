@@ -1,17 +1,20 @@
-// Mockable auth identity shared by test files. vi.mock("@/lib/auth", ...)
-// must be called with a hoist-safe factory: register the desired identity in
-// a hoisted-free way by mutating `currentEmail` BEFORE the route under test
-// runs — the factory closes over `state` which lives in THIS module, and
-// Vitest evaluates the factory lazily on first import of the mocked module.
-// Because the routes call auth() per request (not per import), per-test
-// identity switching works through setEmail().
+// Mockable auth identity shared by test files: vi.mock("@/lib/auth", ...) with
+// makeAuthMock(), then switch identities per test with testAuth. session.user.id
+// is the users.id from services/api, as lib/auth.ts sets it.
 
-const state = { email: "user-a@example.com" as string | null };
+export const USER_A = "11111111-1111-4111-8111-111111111111";
+export const USER_B = "22222222-2222-4222-8222-222222222222";
+
+const state = { user: { email: "user-a@example.com", id: USER_A } as { email: string; id: string } | null };
+
+function session() {
+  return state.user ? { user: { ...state.user, name: "Test User" } } : null;
+}
 
 export function makeAuthMock() {
   return {
-    auth: () =>
-      Promise.resolve(state.email ? { user: { email: state.email, name: "Test User" } } : null),
+    auth: () => Promise.resolve(session()),
+    currentUserId: () => Promise.resolve(state.user?.id ?? null),
     signIn: () => Promise.resolve(),
     signOut: () => Promise.resolve(),
     handlers: {},
@@ -20,10 +23,7 @@ export function makeAuthMock() {
 }
 
 export const testAuth = {
-  asA: () => (state.email = "user-a@example.com"),
-  asB: () => (state.email = "user-b@example.com"),
-  signOut: () => (state.email = null),
-  get email() {
-    return state.email;
-  },
+  asA: () => (state.user = { email: "user-a@example.com", id: USER_A }),
+  asB: () => (state.user = { email: "user-b@example.com", id: USER_B }),
+  signOut: () => (state.user = null),
 };

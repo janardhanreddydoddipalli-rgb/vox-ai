@@ -1,44 +1,34 @@
 import { test, expect } from "@playwright/test";
+import { apiAs, signIn } from "./helpers";
 
-// Playground history, end to end through the signed-in browser session:
-// save via /api/turns, read back, and confirm another user can't touch it.
-// Runs with ROUTE_TURNS=next and =fastapi in CI. No model calls.
-async function signIn(page: import("@playwright/test").Page, who: string) {
-  await page.goto("/signin");
-  await page.getByLabel("Email").fill(`${who}-${Date.now()}@example.com`);
-  await page.getByRole("button", { name: "Test sign-in" }).click();
-  await page.waitForURL("**/dashboard");
-}
-
+// Playground history on services/api as the signed-in user: save, read back,
+// and confirm another user can't read or write it. No model calls.
 test("save, read back, and keep history private", async ({ page, browser }) => {
   await signIn(page, "turns-a");
+  const a = await apiAs(page);
   const sessionId = `s-e2e-${Date.now().toString(36)}`;
   const turns = [
     { role: "user", text: "What is connection pooling?" },
-    { role: "assistant", text: "Reusing open database connections.", latencyMs: 420 },
+    { role: "assistant", text: "Reusing open database connections.", latency_ms: 420 },
   ];
 
-  const saved = await page.request.post("/api/turns", { data: { sessionId, mode: "browser", turns } });
+  const saved = await a.post(`/v1/sessions/${sessionId}/turns`, { data: { mode: "browser", turns } });
   expect(saved.status()).toBe(200);
   expect((await saved.json()).turns.map((t: { text: string }) => t.text)).toEqual(turns.map((t) => t.text));
 
-  const one = await (await page.request.get(`/api/turns?sessionId=${sessionId}`)).json();
-  expect(one.turns.map((t: { role: string; latencyMs: number | null }) => [t.role, t.latencyMs])).toEqual([
+  const one = await (await a.get(`/v1/sessions/${sessionId}/turns`)).json();
+  expect(one.turns.map((t: { role: string; latency_ms: number | null }) => [t.role, t.latency_ms])).toEqual([
     ["user", null],
     ["assistant", 420],
   ]);
-  const all = await (await page.request.get("/api/turns")).json();
-  expect(all.sessions).toContain(sessionId);
+  expect((await (await a.get("/v1/turns")).json()).sessions).toContain(sessionId);
 
-  // A different user: can't read it, can't write into it.
   const other = await browser.newPage();
   await signIn(other, "turns-b");
-  expect((await other.request.get(`/api/turns?sessionId=${sessionId}`)).status()).toBe(404);
-  const injected = await other.request.post("/api/turns", {
-    data: { sessionId, turns: [{ role: "user", text: "injected" }] },
-  });
+  const b = await apiAs(other);
+  expect((await b.get(`/v1/sessions/${sessionId}/turns`)).status()).toBe(404);
+  const injected = await b.post(`/v1/sessions/${sessionId}/turns`, { data: { turns: [{ role: "user", text: "injected" }] } });
   expect(injected.status()).toBe(404);
-  const after = await (await page.request.get(`/api/turns?sessionId=${sessionId}`)).json();
-  expect(after.turns).toHaveLength(2);
+  expect((await (await a.get(`/v1/sessions/${sessionId}/turns`)).json()).turns).toHaveLength(2);
   await other.close();
 });

@@ -1,8 +1,8 @@
 "use client";
 
 // LiveVoice: Gemini Live API over WebSocket with full-duplex PCM audio.
-// Authentication uses a short-lived ephemeral token minted by
-// /api/voice/token — the GEMINI_API_KEY never reaches the browser.
+// Authentication uses a short-lived ephemeral token minted by services/api
+// (POST /v1/voice/sessions): the GEMINI_API_KEY never reaches the browser.
 //
 // The live model calls the same agent tools as the text path: tool
 // declarations are sent in the setup message, and every `toolCall` frame is
@@ -22,12 +22,12 @@ const INPUT_RATE = 16000;
 const OUTPUT_RATE = 24000;
 const VOICE_NAME = "Aoede";
 
-// Everything the live session needs, delivered by POST /api/voice/session:
-// the ephemeral token, the live model id, the system prompt and the agent
-// function declarations (single source of truth with the text agent).
+// Everything the live session needs, from POST /v1/voice/sessions: the
+// server-issued session id (it keys tool calls and usage), the ephemeral token,
+// the live model id, the system prompt and the agent function declarations
+// (single source of truth with the text agent).
 export type LiveSessionConfig = {
-  /** Server-issued voice session id (ROUTE_VOICE=fastapi); keys tool calls and usage. */
-  sessionId?: string;
+  sessionId: string;
   token: string;
   model: string;
   systemInstruction: string;

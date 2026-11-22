@@ -11,8 +11,9 @@ permissions:
 
 jobs:
   ci:
-    # Deterministic only: no real model calls (GEMINI_API_KEY is a dummy, and
-    # tests mock fetch). Real-model checks live in evals.yml (manual).
+    # Deterministic only: no real model calls (no GEMINI_API_KEY anywhere, and
+    # web tests mock fetch). Real-model checks live in evals.yml (manual).
+    # The database is for services/api, which E2E runs; the web app has none.
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -29,7 +30,6 @@ jobs:
           --health-cmd "pg_isready -U ubuntu"
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      TEST_DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       AUTH_SECRET: ci-only-not-a-secret
     steps:
@@ -45,7 +45,7 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      # Alembic (services/api) migrates every database; E2E also runs the real API.
+      # E2E runs the real API (Alembic migrates its database).
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
@@ -71,9 +71,10 @@ jobs:
 
       # Empty database → Alembic upgrade head (pgvector + every revision).
       - name: Migrate (fresh database)
-        run: pnpm run db:migrate
+        working-directory: services/api
+        run: uv run alembic upgrade head
 
-      - name: Unit + API tests
+      - name: Unit tests
         run: pnpm test
 
       - name: Build
@@ -97,20 +98,8 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/api.log"; exit 1
 
-      # Default since M4: every moved route is served by services/api.
-      - name: E2E smoke, routes served by services/api (default)
-        run: pnpm run test:e2e
-
-      # Rollback path: every flag on next, and no API configured at all.
-      - name: E2E smoke, rollback to apps/web (ROUTE_*=next)
-        env:
-          API_INTERNAL_URL: ""
-          ROUTE_MEMORIES: next
-          ROUTE_TURNS: next
-          ROUTE_INTERVIEWS: next
-          ROUTE_CHAT: next
-          ROUTE_AGENT: next
-          ROUTE_VOICE: next
+      # The browser calls the API directly (NEXT_PUBLIC_API_URL = API_INTERNAL_URL).
+      - name: E2E smoke (web + services/api)
         run: pnpm run test:e2e
 
       - name: API log, then stop the API

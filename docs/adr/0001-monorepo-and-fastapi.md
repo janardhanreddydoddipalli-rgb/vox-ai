@@ -1,6 +1,6 @@
 # ADR 0001: pnpm monorepo, with a FastAPI backend migrated in route by route
 
-- Status: Accepted (M1 implemented; M2–M4 pending)
+- Status: Accepted (implemented: M1 monorepo, M2 API skeleton, M3 routes #13–#20, M4 web server code removed #21–#23)
 - Date: 2026-11-21
 
 ## Context
@@ -16,8 +16,8 @@ A rewrite that replaces everything at once would stop feature work and risk regr
 ## Decision
 
 1. **Monorepo (pnpm workspace).** `apps/web` holds the Next.js app, `services/api` (from M2) the FastAPI service, and `packages/` shared code such as the generated API client. One repo, one CI, atomic cross-cutting changes.
-2. **FastAPI owns business logic, data and AI** (target): Python 3.12, SQLAlchemy 2 async, Alembic, Pydantic v2. Next.js keeps only UI, Auth.js and token minting.
-3. **Strangler migration.** Routes move one at a time (M3), each behind a `ROUTE_*` flag so rollback is a config change. Tests are ported first, then traffic switches, then the TS route is deleted.
+2. **FastAPI owns business logic, data and AI** (done in M4): Python 3.12, SQLAlchemy 2 async, Alembic, Pydantic v2. Next.js keeps only UI, Auth.js and token minting.
+3. **Strangler migration.** Routes move one at a time (M3), each behind a `ROUTE_*` flag so rollback is a config change. Tests are ported first, then traffic switches, then the TS route is deleted. In M4 the flags defaulted to the API (#21), then the TS routes and the flags were removed and the browser calls the API directly (#23).
 4. **One migration owner.** Drizzle until the M2 Alembic baseline, then Alembic only. The baseline must reproduce the current schema exactly, including `CREATE EXTENSION vector` (`docs/verification.md`).
 5. **Auth between web and API:** a short-lived EdDSA JWT minted by the web app and verified by the API with the public key (details in a separate ADR at M2).
 

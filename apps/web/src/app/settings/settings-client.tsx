@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { api } from "@/lib/api-browser";
+import type { Problem } from "@vox/api-client";
 
 type Memory = { id: string; kind: string; text: string; createdAt: string };
 
@@ -14,15 +16,10 @@ export default function SettingsClient({ initialMemories }: { initialMemories: M
     setError(null);
     setDeletingId(id);
     try {
-      const res = await fetch("/api/memories", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
+      const { error: problem, response } = await api.DELETE("/v1/memories/{memory_id}", {
+        params: { path: { memory_id: id } },
       });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(data?.error ?? `Delete failed (${res.status})`);
-      }
+      if (!response.ok) throw new Error((problem as Problem | undefined)?.detail ?? `Delete failed (${response.status})`);
       startTransition(() => setMemories((prev) => prev.filter((m) => m.id !== id)));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed");

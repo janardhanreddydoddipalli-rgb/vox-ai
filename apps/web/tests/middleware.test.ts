@@ -29,13 +29,13 @@ describe("middleware", () => {
   });
 
   it("still answers signed-out API calls with a JSON 401 (no redirect)", async () => {
-    const res = await middleware(req("/api/interviews"));
+    const res = await middleware(req("/api/token"));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
   it("leaves public API paths open", async () => {
-    for (const path of ["/api/health", "/api/auth/session"]) {
+    for (const path of ["/api/auth/session", "/api/auth/csrf"]) {
       const res = await middleware(req(path));
       expect(res.headers.get("x-middleware-next")).toBe("1");
     }
@@ -43,7 +43,7 @@ describe("middleware", () => {
 
   it("lets signed-in users through", async () => {
     session.current = { user: { email: "user-a@example.com" } };
-    for (const path of ["/dashboard", "/api/interviews"]) {
+    for (const path of ["/dashboard", "/api/token"]) {
       const res = await middleware(req(path));
       expect(res.headers.get("x-middleware-next")).toBe("1");
     }

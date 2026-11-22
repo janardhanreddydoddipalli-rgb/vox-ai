@@ -1,6 +1,6 @@
 # ADR 0003: FastAPI backend stack (services/api)
 
-- Status: Accepted (skeleton implemented in M2)
+- Status: Accepted (skeleton in M2; every route by M4)
 - Date: 2026-11-22
 - Builds on: ADR 0001 (monorepo, strangler migration)
 
@@ -29,7 +29,7 @@ ADR 0001 decided that business logic, data and AI move from the Next.js app to a
 ## Consequences
 
 - Two toolchains (pnpm and uv). The Makefile gives both one-command targets, and each has its own CI workflow (`ci.yml`, `api.yml`).
-- Schema changes go through Alembic only. `apps/web/drizzle` is frozen (a web test fails on a migration 0009), and existing databases are **stamped**, never upgraded, at the cutover (`docs/runbooks/alembic-cutover.md`).
+- Schema changes go through Alembic only. Drizzle was removed in M4 (its migrations stay in git history). Existing Drizzle-built databases are **stamped** at `0001` (never built from it) and then upgraded, at the cutover (`docs/runbooks/alembic-cutover.md`).
 - During M3, both apps write the same tables, so schema changes must be expand/contract.
 - **Rejected alternatives:**
   - Django: heavier, and its ORM and migrations would duplicate Alembic's job.

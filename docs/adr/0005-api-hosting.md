@@ -1,6 +1,6 @@
 # ADR 0005: Host the API as a container in Singapore, next to Neon
 
-- Status: Proposed. **Not deployed**: the host is chosen at the first API deploy (M3) and needs approval.
+- Status: Accepted (2026-11-22). **Not deployed yet**: the first deploy is M5 and needs approval.
 - Date: 2026-11-22
 
 ## Context
@@ -22,7 +22,7 @@
 
 - **Cloud Run in `asia-southeast1`**, image from `infra/docker/api.Dockerfile`. Secrets come from Secret Manager: `DATABASE_URL` (Neon **pooled**), `JWT_PUBLIC_KEY`, `INTERNAL_API_TOKEN`, `SENTRY_DSN`.
 - **Migrations** run as a one-off job from the same image (`alembic upgrade head`) with the Neon **direct** URL, never at container startup. The first time, the existing database is **stamped** instead (runbook).
-- **The web app moves next to them:** Vercel function region `sin1` (it still queries Neon directly until M4).
+- **The web app moves next to them:** Vercel function region `sin1` (since M4 it has no database access; its server pages and sign-in call the API).
 
 ## Consequences
 

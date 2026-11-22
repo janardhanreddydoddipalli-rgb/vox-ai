@@ -3,10 +3,6 @@
 
 export type UpsertedUser = { user_id: string };
 
-export function upsertViaApiEnabled(): boolean {
-  return process.env.AUTH_UPSERT_VIA_API === "1";
-}
-
 // Resolves a signed-in identity to its stable users.id through the API.
 export async function upsertUserViaApi(identity: {
   email: string;
