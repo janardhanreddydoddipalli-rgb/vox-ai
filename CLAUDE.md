@@ -49,7 +49,9 @@
 ## Workflow
 - Inspect the code before changing it. Never assume reported behaviour exists; reproduce it first.
 - Small commits, Conventional Commits. Use `git mv` for moves.
+- Dev loop: run only the tests you are touching (`uv run --directory services/api pytest tests/test_x.py::test_y`, `pnpm --filter @vox/web exec vitest run tests/x.test.ts`, `pnpm --filter @vox/web exec playwright test e2e/x.spec.ts`), or the shortcuts `make test-api-fast`, `make test-web-fast`, `make e2e-smoke`. Run the full suites once before opening a PR, not after every step.
 - Before reporting done: run lint, typecheck, tests and build; paste the real output. Mark each item VERIFIED / PARTIAL / FAILED / NOT TESTED.
+- CI is split by side (`docs/ci-performance.md`): `api.yml` for services/api, `web.yml` for apps/web and packages, `e2e.yml` for either. A docs-only change runs none of them.
 - Never push to `main`, deploy, run migrations on a real database, or change secrets or hosting settings without explicit approval. Work on a branch and open a PR.
 - Update `docs/` when behaviour or architecture changes.
 

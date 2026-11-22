@@ -3,21 +3,58 @@ name: API
 on:
   pull_request:
     branches: [main]
-    paths: ["services/api/**", "packages/api-client/openapi.json", ".github/workflows/api.yml", "infra/docker/api.Dockerfile"]
+    paths: &paths
+      - "services/api/**"
+      - "packages/api-client/**"
+      - "infra/docker/api.Dockerfile"
+      - ".github/workflows/api.yml"
   push:
     branches: [main]
-    paths: ["services/api/**", "packages/api-client/openapi.json", ".github/workflows/api.yml", "infra/docker/api.Dockerfile"]
+    paths: *paths
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: services/api
+
 jobs:
-  api:
-    # Deterministic: no model calls (FakeProvider only). Real Postgres 18 + pgvector.
+  lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+      - run: uv sync --frozen
+      - name: Ruff (lint)
+        run: uv run ruff check .
+      - name: Ruff (format)
+        run: uv run ruff format --check .
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+      - run: uv sync --frozen
+      - name: Mypy (strict)
+        run: uv run mypy
+
+  test:
+    # Deterministic: no model calls (FakeProvider only). Real Postgres 18 + pgvector:
+    # the CI service container (TEST_DATABASE_URL set, so no testcontainers). The
+    # suite migrates it once, then each xdist worker tests in its own copy.
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: pgvector/pgvector:pg18 # matches Neon (Postgres 18.7, pgvector 0.8.7)
@@ -33,26 +70,15 @@ jobs:
       TEST_DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/vox_test
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-dependency-glob: services/api/uv.lock
-
       - name: Install (exact lockfile, Python from .python-version)
         run: uv sync --frozen
 
-      - name: Ruff (lint)
-        run: uv run ruff check .
-
-      - name: Ruff (format)
-        run: uv run ruff format --check .
-
-      - name: Mypy (strict)
-        run: uv run mypy
-
-      - name: Pytest
-        run: uv run pytest
+      - name: Pytest (parallel, one database per worker)
+        run: uv run pytest -n auto
 
       - name: OpenAPI schema is current (packages/api-client/openapi.json)
         run: uv run python scripts/export_openapi.py --check
@@ -64,19 +90,45 @@ jobs:
           PGPASSWORD: ubuntu
           DATABASE_URL: postgresql://ubuntu:ubuntu@localhost:5432/alembic_empty
         run: |
-          psql -h localhost -U ubuntu -d vox_test -c "CREATE DATABASE alembic_empty"
+          psql -h localhost -U ubuntu -d postgres -c "CREATE DATABASE alembic_empty"
           uv run alembic upgrade head
           uv run alembic current
           uv run alembic check
 
   docker:
     # The production image builds and starts (health answers) without a database.
+    # Only on main, and on PRs that change services/api or its Dockerfile.
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: docker build -f infra/docker/api.Dockerfile -t vox-api:ci services/api
+        with:
+          fetch-depth: 0
+      - name: Image inputs changed?
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || \
+             ! git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- services/api infra/docker/api.Dockerfile; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"; echo "No image inputs changed: skipping the build."
+          fi
+      - uses: docker/setup-buildx-action@v3
+        if: steps.changed.outputs.build == 'true'
+      - name: Build (layers cached in GitHub Actions)
+        if: steps.changed.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: services/api
+          file: infra/docker/api.Dockerfile
+          tags: vox-api:ci
+          load: true
+          cache-from: type=gha,scope=api-image
+          cache-to: type=gha,mode=max,scope=api-image
       - name: Smoke (liveness, non-root)
+        if: steps.changed.outputs.build == 'true'
         run: |
           docker run -d --name api -p 8000:8000 \
             -e DATABASE_URL=postgresql://u:p@127.0.0.1:1/none \

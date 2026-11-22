@@ -1,19 +1,31 @@
-name: CI
+name: E2E
 
+# Web build + Playwright against the real API on a freshly migrated database.
+# Runs when either side changes. Deterministic: no GEMINI_API_KEY anywhere.
 on:
   pull_request:
     branches: [main]
+    paths: &paths
+      - "apps/web/**"
+      - "packages/**"
+      - "services/api/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/e2e.yml"
   push:
     branches: [main]
+    paths: *paths
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  ci:
-    # Deterministic only: no real model calls (no GEMINI_API_KEY anywhere, and
-    # web tests mock fetch). Real-model checks live in evals.yml (manual).
-    # The database is for services/api, which E2E runs; the web app has none.
+  e2e:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -32,75 +44,76 @@ jobs:
     env:
       DATABASE_URL: postgres://ubuntu:ubuntu@localhost:5432/voicebot_test
       AUTH_SECRET: ci-only-not-a-secret
+      AUTH_TRUST_HOST: "true" # next start outside Vercel
+      E2E_TEST_AUTH: "1" # the password-less test sign-in (CI build only, never deployed)
       # CI-only service credential, shared by the web server (sign-in upsert) and the API.
       INTERNAL_API_TOKEN: ci-only-0123456789abcdef0123456789
+      API_INTERNAL_URL: http://127.0.0.1:8000
+      NEXT_PUBLIC_API_URL: http://127.0.0.1:8000 # inlined into the browser bundle at build time
     steps:
       - uses: actions/checkout@v4
-
       - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
-
-      - name: Install
+      - name: Install (web)
         run: pnpm install --frozen-lockfile
 
-      # E2E runs the real API (Alembic migrates its database).
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
           cache-dependency-glob: services/api/uv.lock
-
-      - name: Install API (Python)
+      - name: Install (API runtime only)
         working-directory: services/api
-        run: uv sync --frozen
+        run: uv sync --frozen --no-dev
 
-      - name: Lint
-        run: pnpm run lint
-
-      - name: Typecheck
-        run: pnpm run typecheck
-
-      # Generated TypeScript must match the committed OpenAPI schema, and compile.
-      - name: API client is generated from the current schema
-        working-directory: .
-        run: |
-          pnpm --filter @vox/api-client generate
-          git diff --exit-code -- packages/api-client
-          pnpm --filter @vox/api-client typecheck
-
-      # Empty database → Alembic upgrade head (pgvector + every revision).
-      - name: Migrate (fresh database)
-        working-directory: services/api
-        run: uv run alembic upgrade head
-
-      - name: Unit tests
-        run: pnpm test
+      - name: Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: apps/web/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ hashFiles('apps/web/src/**', 'packages/api-client/src/**') }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       - name: Build
         run: pnpm run build
 
+      - name: Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Playwright browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --with-deps chromium
+      - name: Install Playwright system deps (browser from cache)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
 
-      # CI-only key pair and service token (ephemeral, never secrets).
-      - name: Start services/api for E2E
+      # Empty database → Alembic upgrade head (pgvector + every revision), once.
+      - name: Migrate (fresh database)
+        working-directory: services/api
+        run: .venv/bin/alembic upgrade head
+
+      # CI-only key pair (ephemeral, never a secret).
+      - name: Start services/api
         run: |
           node scripts/generate-api-jwt-keys.mjs > "$RUNNER_TEMP/keys.env"
           echo "API_JWT_PRIVATE_KEY=$(grep '^API_JWT_PRIVATE_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)" >> "$GITHUB_ENV"
-          echo "API_INTERNAL_URL=http://127.0.0.1:8000" >> "$GITHUB_ENV"
           export JWT_PUBLIC_KEY="$(grep '^JWT_PUBLIC_KEY=' "$RUNNER_TEMP/keys.env" | cut -d= -f2-)"
           cd ../../services/api
           # The venv's uvicorn, not `uv run`: a long-lived uv process would hold
           # the uv cache lock and break setup-uv's post-job cache prune.
-          WEB_ORIGIN=http://127.0.0.1:3010             nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
+          WEB_ORIGIN=http://127.0.0.1:3010 nohup .venv/bin/uvicorn vox_api.main:create_app --factory --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &
           echo $! > "$RUNNER_TEMP/api.pid"
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8000/v1/health && exit 0; sleep 1; done
           cat "$RUNNER_TEMP/api.log"; exit 1
 
-      # The browser calls the API directly (NEXT_PUBLIC_API_URL = API_INTERNAL_URL).
+      # One production server (next start on the build above), chromium, 2 workers.
       - name: E2E smoke (web + services/api)
         run: pnpm run test:e2e
 

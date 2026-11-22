@@ -1,6 +1,7 @@
 # Vox task runner. Every target is one command, so on machines without
 # `make` (Windows without Git Bash tools) run the command under each target directly.
-.PHONY: help install dev dev-web build lint typecheck test test-e2e migrate db-up db-down check \n	api-install api-dev api-lint api-typecheck api-test api-migrate api-seed api-eval api-up api-openapi
+.PHONY: help install dev dev-web build lint typecheck test test-e2e migrate db-up db-down check \n	api-install api-dev api-lint api-typecheck api-test api-migrate api-seed api-eval api-up api-openapi \
+	test-api-fast test-web-fast e2e-smoke
 
 help:  ## List targets
 	@grep -E "^[a-z-]+:.*## " Makefile | sed -E "s/:.*## /\t/"
@@ -31,6 +32,15 @@ test:  ## Web unit tests (no database; API calls mocked)
 
 test-e2e:  ## Playwright smoke E2E against a running API, no model calls (needs DATABASE_URL)
 	pnpm test:e2e
+
+test-api-fast:  ## Dev loop: API tests, stop at the first failure, last failures first
+	pnpm test-api-fast
+
+test-web-fast:  ## Dev loop: web unit tests related to uncommitted changes
+	pnpm test-web-fast
+
+e2e-smoke:  ## Dev loop: one Playwright spec (smoke) against a running API
+	pnpm e2e-smoke
 
 migrate:  ## Alembic upgrade head on DATABASE_URL (pgvector + every revision)
 	pnpm db:migrate

@@ -21,7 +21,7 @@ apps/web/            Next.js UI: src/ (app, lib, voice), tests/ (unit), e2e/ (Pl
 services/api/        FastAPI service (Python 3.12, uv): src/vox_api, alembic/, tests/, evals/, scripts/
 packages/api-client/ typed TypeScript client generated from the API's OpenAPI schema
 docs/                architecture, ADRs, security, metrics, verification, backlog, runbooks
-.github/             CI (ci.yml, api.yml), manual real-model evals (evals.yml), dependabot
+.github/             CI (web.yml, api.yml, e2e.yml), manual real-model evals (evals.yml), dependabot
 compose.yaml         local Postgres (pgvector) + Redis, and the API container (profile "api")
 Makefile             one command per target
 CLAUDE.md            engineering rules for humans and AI agents

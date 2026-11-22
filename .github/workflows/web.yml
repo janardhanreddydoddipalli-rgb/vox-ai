@@ -1,0 +1,70 @@
+name: Web
+
+# apps/web and the shared packages: lint, typecheck and unit tests in parallel.
+# Deterministic only (web tests mock every API call). Build + E2E live in e2e.yml.
+on:
+  pull_request:
+    branches: [main]
+    paths: &paths
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/web.yml"
+  push:
+    branches: [main]
+    paths: *paths
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Typecheck (web)
+        run: pnpm run typecheck
+      # Generated TypeScript must match the committed OpenAPI schema, and compile.
+      - name: API client is generated from the current schema
+        run: |
+          pnpm --filter @vox/api-client generate
+          git diff --exit-code -- packages/api-client
+          pnpm --filter @vox/api-client typecheck
+
+  unit:
+    runs-on: ubuntu-latest
+    env:
+      AUTH_SECRET: ci-only-not-a-secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test

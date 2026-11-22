@@ -28,7 +28,7 @@ ADR 0001 decided that business logic, data and AI move from the Next.js app to a
 
 ## Consequences
 
-- Two toolchains (pnpm and uv). The Makefile gives both one-command targets, and each has its own CI workflow (`ci.yml`, `api.yml`).
+- Two toolchains (pnpm and uv). The Makefile gives both one-command targets, and each has its own CI workflow (`web.yml`, `api.yml`; `e2e.yml` covers both, ADR 0006).
 - Schema changes go through Alembic only. Drizzle was removed in M4 (its migrations stay in git history). Existing Drizzle-built databases are **stamped** at `0001` (never built from it) and then upgraded, at the cutover (`docs/runbooks/alembic-cutover.md`).
 - During M3, both apps write the same tables, so schema changes must be expand/contract.
 - **Rejected alternatives:**
