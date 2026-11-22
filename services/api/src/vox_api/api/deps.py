@@ -13,6 +13,7 @@ from vox_api.core.errors import ProblemError
 from vox_api.core.rate_limit import RateLimiter
 from vox_api.core.security import InvalidTokenError, internal_token_matches, verify_access_token
 from vox_api.llm.base import LLMProvider
+from vox_api.llm.live import LiveTokenMinter
 from vox_api.models import User
 from vox_api.observability.sentry import set_user
 from vox_api.repositories import users as users_repo
@@ -36,9 +37,15 @@ def get_llm(request: Request) -> LLMProvider | None:
     return llm
 
 
+def get_live_tokens(request: Request) -> LiveTokenMinter | None:
+    minter: LiveTokenMinter | None = request.app.state.live_tokens
+    return minter
+
+
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 LLMDep = Annotated[LLMProvider | None, Depends(get_llm)]
+LiveTokensDep = Annotated[LiveTokenMinter | None, Depends(get_live_tokens)]
 
 
 async def get_current_user(

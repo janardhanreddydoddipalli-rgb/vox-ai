@@ -279,6 +279,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/voice/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a live voice session: an ephemeral Gemini Live token plus its setup */
+        post: operations["create_session_v1_voice_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/voice/sessions/{session_id}/tool-calls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run one tool call from a live session (idempotent per call_id) */
+        post: operations["tool_call_v1_voice_sessions__session_id__tool_calls_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/voice/sessions/{session_id}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a live session's token usage against the daily budget
+         * @description Counts are client-reported, so they are bounded per report and kept per session
+         *     for reconciliation. An expired session still records: the spend was real.
+         */
+        post: operations["record_usage_v1_voice_sessions__session_id__usage_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -366,6 +421,17 @@ export interface components {
             id: string;
             /** Report */
             report: {
+                [key: string]: unknown;
+            };
+        };
+        /** FunctionDeclaration */
+        FunctionDeclaration: {
+            /** Description */
+            description: string;
+            /** Name */
+            name: string;
+            /** Parameters */
+            parameters: {
                 [key: string]: unknown;
             };
         };
@@ -589,6 +655,30 @@ export interface components {
             /** Turns */
             turns: components["schemas"]["Turn"][];
         };
+        /** ToolCallIn */
+        ToolCallIn: {
+            /** Args */
+            args?: {
+                [key: string]: unknown;
+            };
+            /** Call Id */
+            call_id: string;
+            /** Name */
+            name: string;
+        };
+        /** ToolCallOut */
+        ToolCallOut: {
+            /** Error */
+            error?: string | null;
+            /** Message */
+            message?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Result */
+            result?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** Turn */
         Turn: {
             /**
@@ -649,6 +739,20 @@ export interface components {
             /** Turns */
             turns: components["schemas"]["TurnIn"][];
         };
+        /** UsageIn */
+        UsageIn: {
+            /** Prompt Tokens */
+            prompt_tokens: number;
+            /** Response Tokens */
+            response_tokens: number;
+        };
+        /** UsageOut */
+        UsageOut: {
+            /** Budget Exceeded */
+            budget_exceeded: boolean;
+            /** Message */
+            message?: string | null;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -661,6 +765,31 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VoiceSessionIn */
+        VoiceSessionIn: {
+            /** Interview Id */
+            interview_id?: string | null;
+            /** Language */
+            language?: ("en" | "hi" | "ta" | "te") | null;
+        };
+        /** VoiceSessionOut */
+        VoiceSessionOut: {
+            /** Expires In Sec */
+            expires_in_sec: number;
+            /** Model */
+            model: string;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** System Instruction */
+            system_instruction: string;
+            /** Token */
+            token: string;
+            /** Tools */
+            tools: components["schemas"]["FunctionDeclaration"][];
         };
     };
     responses: never;
@@ -1286,6 +1415,172 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AllTurns"];
+                };
+            };
+        };
+    };
+    create_session_v1_voice_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VoiceSessionOut"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Rate limited, or code=budget_exceeded */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gemini refused the token */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No Gemini key configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    tool_call_v1_voice_sessions__session_id__tool_calls_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolCallIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolCallOut"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description call_id was already used for another tool */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Voice session expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description No model configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_usage_v1_voice_sessions__session_id__usage_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UsageIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageOut"];
+                };
+            };
+            /** @description Not found, or not yours (problem+json) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

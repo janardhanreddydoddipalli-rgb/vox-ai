@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = None
     gemini_model: str = "gemini-3.5-flash"
     gemini_embedding_model: str = "gemini-embedding-001"
+    gemini_live_model: str = "models/gemini-3.1-flash-live-preview"
 
     # Cost guard: per-user daily token budget across every paid model call (0 = off).
     daily_token_budget: int = Field(default=200_000, ge=0)

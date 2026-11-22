@@ -18,12 +18,19 @@ class ProblemError(Exception):
     """Raise anywhere to return a problem+json response with this status."""
 
     def __init__(
-        self, status: int, detail: str | None = None, *, headers: dict[str, str] | None = None
+        self,
+        status: int,
+        detail: str | None = None,
+        *,
+        headers: dict[str, str] | None = None,
+        code: str | None = None,
     ) -> None:
         super().__init__(detail)
         self.status = status
         self.detail = detail
         self.headers = headers
+        # Machine-readable reason when one status has several meanings (e.g. 429 budget_exceeded).
+        self.code = code
 
 
 def problem_response(
@@ -53,7 +60,8 @@ def problem_response(
 async def _problem_error(request: Request, exc: Exception) -> JSONResponse:
     if not isinstance(exc, ProblemError):  # registered for this type only
         raise exc
-    return problem_response(request, exc.status, exc.detail, headers=exc.headers)
+    extra = {"code": exc.code} if exc.code else None
+    return problem_response(request, exc.status, exc.detail, headers=exc.headers, extra=extra)
 
 
 async def _http_error(request: Request, exc: Exception) -> JSONResponse:

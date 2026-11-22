@@ -17,5 +17,5 @@ Agreed work that's deliberately scheduled later. Each item becomes its own branc
 
 ## M3
 
-- Server-side `voice_sessions` table: tool calls keyed by a server-issued `voice_session_id`, idempotent per `call_id`, and a duration-based usage floor (see `docs/verification.md` Q1 and Q2).
+- Live voice: a duration-based usage floor per voice session (once Q1 says how `usageMetadata` counts) and locked ephemeral tokens (Q2). `voice_sessions` keeps per-session token totals for this.
 - Rebuild email magic-link sign-in in FastAPI (ADR 0002 follow-up).

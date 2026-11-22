@@ -198,6 +198,30 @@
         "title": "EndResult",
         "type": "object"
       },
+      "FunctionDeclaration": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "parameters"
+        ],
+        "title": "FunctionDeclaration",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -699,6 +723,80 @@
         "title": "SessionTurns",
         "type": "object"
       },
+      "ToolCallIn": {
+        "properties": {
+          "args": {
+            "additionalProperties": true,
+            "title": "Args",
+            "type": "object"
+          },
+          "call_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Call Id",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "name"
+        ],
+        "title": "ToolCallIn",
+        "type": "object"
+      },
+      "ToolCallOut": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ToolCallOut",
+        "type": "object"
+      },
       "Turn": {
         "properties": {
           "created_at": {
@@ -904,6 +1002,52 @@
         "title": "TurnsIn",
         "type": "object"
       },
+      "UsageIn": {
+        "properties": {
+          "prompt_tokens": {
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Prompt Tokens",
+            "type": "integer"
+          },
+          "response_tokens": {
+            "maximum": 1000000.0,
+            "minimum": 0.0,
+            "title": "Response Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prompt_tokens",
+          "response_tokens"
+        ],
+        "title": "UsageIn",
+        "type": "object"
+      },
+      "UsageOut": {
+        "properties": {
+          "budget_exceeded": {
+            "title": "Budget Exceeded",
+            "type": "boolean"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "required": [
+          "budget_exceeded"
+        ],
+        "title": "UsageOut",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -942,6 +1086,83 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VoiceSessionIn": {
+        "properties": {
+          "interview_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interview Id"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "enum": [
+                  "en",
+                  "hi",
+                  "ta",
+                  "te"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          }
+        },
+        "title": "VoiceSessionIn",
+        "type": "object"
+      },
+      "VoiceSessionOut": {
+        "properties": {
+          "expires_in_sec": {
+            "title": "Expires In Sec",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "title": "Session Id",
+            "type": "string"
+          },
+          "system_instruction": {
+            "title": "System Instruction",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/FunctionDeclaration"
+            },
+            "title": "Tools",
+            "type": "array"
+          }
+        },
+        "required": [
+          "session_id",
+          "token",
+          "model",
+          "system_instruction",
+          "tools",
+          "expires_in_sec"
+        ],
+        "title": "VoiceSessionOut",
         "type": "object"
       }
     },
@@ -1706,6 +1927,196 @@
         "summary": "All my sessions and their turns",
         "tags": [
           "turns"
+        ]
+      }
+    },
+    "/v1/voice/sessions": {
+      "post": {
+        "operationId": "create_session_v1_voice_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSessionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VoiceSessionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited, or code=budget_exceeded"
+          },
+          "502": {
+            "description": "Gemini refused the token"
+          },
+          "503": {
+            "description": "No Gemini key configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start a live voice session: an ephemeral Gemini Live token plus its setup",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/v1/voice/sessions/{session_id}/tool-calls": {
+      "post": {
+        "operationId": "tool_call_v1_voice_sessions__session_id__tool_calls_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToolCallIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolCallOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "409": {
+            "description": "call_id was already used for another tool"
+          },
+          "410": {
+            "description": "Voice session expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "No model configured"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run one tool call from a live session (idempotent per call_id)",
+        "tags": [
+          "voice"
+        ]
+      }
+    },
+    "/v1/voice/sessions/{session_id}/usage": {
+      "post": {
+        "description": "Counts are client-reported, so they are bounded per report and kept per session\nfor reconciliation. An expired session still records: the spend was real.",
+        "operationId": "record_usage_v1_voice_sessions__session_id__usage_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UsageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not found, or not yours (problem+json)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record a live session's token usage against the daily budget",
+        "tags": [
+          "voice"
         ]
       }
     }

@@ -23,11 +23,11 @@ export type EngineHandlers = Handlers & {
   onFallback?: (from: VoiceMode, to: VoiceMode, reason: string) => void;
 };
 
-async function fetchSessionConfig(language: string): Promise<LiveSessionConfig> {
+async function fetchSessionConfig(language: string, interviewId: string | null): Promise<LiveSessionConfig> {
   const res = await fetch("/api/voice/session", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(language ? { language } : {}),
+    body: JSON.stringify({ ...(language ? { language } : {}), ...(interviewId ? { interviewId } : {}) }),
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -36,22 +36,24 @@ async function fetchSessionConfig(language: string): Promise<LiveSessionConfig> 
   return res.json();
 }
 
-async function executeTool(name: string, args: unknown, interviewId: string | null): Promise<unknown> {
+type SessionKeys = { interviewId: string | null; sessionId?: string };
+
+async function executeTool(name: string, args: unknown, keys: SessionKeys, callId?: string): Promise<unknown> {
   const res = await fetch("/api/voice/tool", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, args, interviewId }),
+    body: JSON.stringify({ name, args, ...keys, callId }),
   });
   const data = await res.json().catch(() => ({ ok: false, error: "tool route unreachable" }));
   if (!data.ok) return { error: data.error ?? "tool failed", message: data.message };
   return data.result;
 }
 
-async function reportUsage(interviewId: string | null, promptTokens: number, responseTokens: number) {
+async function reportUsage(keys: SessionKeys, promptTokens: number, responseTokens: number) {
   const res = await fetch("/api/voice/usage", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ interviewId, promptTokens, responseTokens }),
+    body: JSON.stringify({ ...keys, promptTokens, responseTokens }),
   });
   if (!res.ok) return { budgetExceeded: false, message: null };
   const data = await res.json().catch(() => ({}));
@@ -81,12 +83,13 @@ export class VoiceEngine {
     this.stop();
     // 1) Try the Gemini Live API.
     try {
-      const config = await fetchSessionConfig(this.language);
+      const config = await fetchSessionConfig(this.language, this.interviewId);
+      const keys = (): SessionKeys => ({ interviewId: this.interviewId, sessionId: config.sessionId });
       const live = new LiveVoice({
         handlers: this.h,
         config,
-        toolExecutor: (name, args) => executeTool(name, args, this.interviewId),
-        usageReporter: (promptTokens, responseTokens) => reportUsage(this.interviewId, promptTokens, responseTokens),
+        toolExecutor: (name, args, callId) => executeTool(name, args, keys(), callId),
+        usageReporter: (promptTokens, responseTokens) => reportUsage(keys(), promptTokens, responseTokens),
       });
       live.language = this.language;
       live.interviewId = this.interviewId;

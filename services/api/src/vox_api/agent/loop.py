@@ -45,20 +45,31 @@ def _invalid(name: str, exc: ValidationError) -> dict[str, Any]:
     return {"error": f"Invalid arguments for {name}: {issues}"}
 
 
-async def run_tool(name: str, args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
-    """Validate and run one tool call; failures come back as {"error": ...} for the model."""
+@dataclass(frozen=True)
+class ToolOutcome:
+    ok: bool
+    output: dict[str, Any]  # the tool's result, or {"error": ...} when it could not run
+
+
+async def execute_tool(name: str, args: dict[str, Any], ctx: ToolContext) -> ToolOutcome:
+    """Validate and run one tool call (unknown tool, bad arguments and failures are not ok)."""
     tool = get_tool(name)
     if tool is None:
-        return {"error": f"Unknown tool: {name}"}
+        return ToolOutcome(False, {"error": f"Unknown tool: {name}"})
     try:
         parsed = tool.input_model.model_validate(args)
     except ValidationError as exc:
-        return _invalid(name, exc)
+        return ToolOutcome(False, _invalid(name, exc))
     try:
         async with ctx.db.begin_nested():
-            return await tool.handler(parsed, ctx)
-    except Exception as exc:  # any tool failure goes back to the model; the savepoint undid its writes
-        return {"error": f"Tool {name} failed: {type(exc).__name__}: {exc}"[:500]}
+            return ToolOutcome(True, await tool.handler(parsed, ctx))
+    except Exception as exc:  # any tool failure goes back to the caller; the savepoint undid its writes
+        return ToolOutcome(False, {"error": f"Tool {name} failed: {type(exc).__name__}: {exc}"[:500]})
+
+
+async def run_tool(name: str, args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
+    """One tool call for the model: failures come back as {"error": ...}."""
+    return (await execute_tool(name, args, ctx)).output
 
 
 async def run(

@@ -100,3 +100,25 @@ async def fetch_one(database_url: str, query: str, *args: object) -> dict[str, o
     finally:
         await conn.close()
     return dict(row) if row else None
+
+
+async def insert_voice_session(
+    database_url: str,
+    user_id: uuid.UUID,
+    interview_id: uuid.UUID | None = None,
+    *,
+    expires_in: dt.timedelta = dt.timedelta(minutes=60),
+) -> uuid.UUID:
+    conn = await asyncpg.connect(dsn(database_url))
+    try:
+        row = await conn.fetchrow(
+            "insert into voice_sessions (user_id, interview_id, expires_at)"
+            " values ($1, $2, now() + $3::interval) returning id",
+            user_id,
+            interview_id,
+            expires_in,
+        )
+    finally:
+        await conn.close()
+    assert row is not None
+    return uuid.UUID(str(row["id"]))
