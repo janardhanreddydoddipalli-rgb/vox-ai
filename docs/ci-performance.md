@@ -44,3 +44,8 @@ A PR touching one side waited for the slower of CI (155–225 s) and API (47–5
 | Docs only | 155–225 (CI ran on every PR) | 0 (no workflow) |
 
 E2E is now the critical path. Its biggest remaining costs are runner setup (service container, uv and Node setup) and the Next build, not the tests. Locally, E2E against one production build with 2 workers takes 15 s instead of about 1.3 min on the dev server. The local API suite is disk-bound on Docker Desktop for Windows (serial 50 s, `-n 2`/`4`/`auto` 59–67 s), so the dev loop there stays serial and targeted (`make test-api-fast`).
+
+## Notes
+
+- **Concurrency:** a new push cancels the same branch's run still in progress (`cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}`). Runs on `main` are never cancelled, so every merge commit is fully checked.
+- **If branch protection with required checks is enabled later:** a docs-only PR triggers none of the path-filtered workflows, so a required check would never report and the PR could not merge. Add a lightweight, always-run `ci-required` job (no path filter) that passes when the relevant workflows passed or were skipped, and make that the only required check.
