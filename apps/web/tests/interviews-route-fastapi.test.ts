@@ -76,8 +76,8 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  delete process.env.ROUTE_INTERVIEWS;
-  delete process.env.ROUTE_TURNS;
+  process.env.ROUTE_INTERVIEWS = "next";
+  process.env.ROUTE_TURNS = "next";
   vi.unstubAllGlobals();
 });
 
@@ -181,7 +181,7 @@ describe("interview routes with ROUTE_INTERVIEWS=fastapi", () => {
 
 describe("dashboard loader with every flag on next", () => {
   it("never needs the API (API_INTERNAL_URL may be unset)", async () => {
-    delete process.env.ROUTE_INTERVIEWS;
+    process.env.ROUTE_INTERVIEWS = "next";
     const saved = process.env.API_INTERNAL_URL;
     delete process.env.API_INTERNAL_URL;
     const fetchSpy = vi.fn();

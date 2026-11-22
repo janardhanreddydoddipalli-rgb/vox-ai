@@ -67,7 +67,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  delete process.env.ROUTE_TURNS;
+  process.env.ROUTE_TURNS = "next";
   vi.unstubAllGlobals();
 });
 
