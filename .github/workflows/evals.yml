@@ -35,8 +35,8 @@ jobs:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       EVAL_PASS_THRESHOLD: ${{ inputs.pass_threshold }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Install API (Python)
         run: uv sync --frozen
       - name: Require GEMINI_API_KEY
@@ -74,15 +74,15 @@ jobs:
       API_INTERNAL_URL: http://127.0.0.1:8000
       NEXT_PUBLIC_API_URL: http://127.0.0.1:8000
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # version from package.json "packageManager"
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6 # version from package.json "packageManager"
+      - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: pnpm
       - name: Install
         run: pnpm install --frozen-lockfile
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v7
       - name: Install API (Python)
         working-directory: services/api
         run: uv sync --frozen
@@ -115,7 +115,7 @@ jobs:
         run: tail -n 100 "$RUNNER_TEMP/api.log" || true
       - name: Upload Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report-real-model
           path: |
